@@ -1,0 +1,26 @@
+# Sensitive files - DO NOT COMMIT
+.env
+credentials.json
+oauth_credentials.json
+token.json
+
+# WhatsApp session data
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

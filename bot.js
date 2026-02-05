@@ -1,0 +1,546 @@
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const { google } = require('googleapis');
+const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+const url = require('url');
+require('dotenv').config();
+
+// Admin Configuration
+const ADMIN_NUMBER = '601111484198@c.us'; // Only admin can change settings
+
+// Conversation Memory (stores last 10 messages per chat)
+const conversationHistory = new Map();
+const MAX_HISTORY = 10;
+
+// Bot Settings (admin can change these)
+let botSettings = {
+    enabled: true,
+    maxRows: 5000,
+    respondInGroups: true
+};
+
+// Track active conversations in groups (user -> timestamp of last interaction)
+const activeGroupConversations = new Map();
+const CONVERSATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+// Personal mode conversation history (separate from business)
+const personalHistory = [];
+const MAX_PERSONAL_HISTORY = 20;
+
+// OAuth2 Configuration
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+const TOKEN_PATH = path.join(__dirname, 'token.json');
+const CREDENTIALS_PATH = path.join(__dirname, 'oauth_credentials.json');
+
+// Initialize WhatsApp Client
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
+});
+
+// Initialize Claude AI
+const anthropic = new Anthropic({
+    apiKey: process.env.CLAUDE_API_KEY
+});
+
+// Google Sheets setup
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+let sheetsAPI;
+
+// Initialize Google Sheets API with OAuth2
+async function initGoogleSheets() {
+    try {
+        // Check if we have OAuth credentials
+        if (!fs.existsSync(CREDENTIALS_PATH)) {
+            console.error('❌ oauth_credentials.json not found');
+            console.log('\n📋 To set up Google Sheets access:');
+            console.log('1. Go to https://console.cloud.google.com/');
+            console.log('2. Create a project and enable Google Sheets API');
+            console.log('3. Go to Credentials > Create Credentials > OAuth client ID');
+            console.log('4. Choose "Desktop app" as application type');
+            console.log('5. Download the JSON and save as "oauth_credentials.json" in this folder');
+            console.log('6. Run "node auth.js" to authenticate\n');
+            return false;
+        }
+
+        const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
+        const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
+        const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+
+        // Check if we have a saved token
+        if (fs.existsSync(TOKEN_PATH)) {
+            const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
+            oAuth2Client.setCredentials(token);
+
+            // Check if token is expired and refresh if needed
+            if (token.expiry_date && token.expiry_date < Date.now()) {
+                console.log('🔄 Refreshing Google token...');
+                const { credentials: newCredentials } = await oAuth2Client.refreshAccessToken();
+                oAuth2Client.setCredentials(newCredentials);
+                fs.writeFileSync(TOKEN_PATH, JSON.stringify(newCredentials));
+            }
+
+            sheetsAPI = google.sheets({ version: 'v4', auth: oAuth2Client });
+            console.log('✅ Google Sheets API initialized');
+            return true;
+        } else {
+            console.error('❌ Not authenticated with Google');
+            console.log('Run "node auth.js" to authenticate with your Google account\n');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Error initializing Google Sheets:', error.message);
+        return false;
+    }
+}
+
+// Read data from Google Sheets
+async function getSheetData(sheetName, range = 'A:Z') {
+    try {
+        const response = await sheetsAPI.spreadsheets.values.get({
+            spreadsheetId: SHEET_ID,
+            range: `${sheetName}!${range}`,
+        });
+
+        return response.data.values || [];
+    } catch (error) {
+        console.error(`Error reading sheet ${sheetName}:`, error.message);
+        return [];
+    }
+}
+
+// Get all available sheets
+async function getAllSheets() {
+    try {
+        const response = await sheetsAPI.spreadsheets.get({
+            spreadsheetId: SHEET_ID,
+        });
+
+        return response.data.sheets.map(sheet => sheet.properties.title);
+    } catch (error) {
+        console.error('Error getting sheets:', error.message);
+        return [];
+    }
+}
+
+// Format sheet data for Claude
+async function getAllBusinessData() {
+    try {
+        const sheets = await getAllSheets();
+        let allData = {};
+
+        for (const sheetName of sheets) {
+            const data = await getSheetData(sheetName);
+            allData[sheetName] = data;
+        }
+
+        return allData;
+    } catch (error) {
+        console.error('Error getting business data:', error);
+        return {};
+    }
+}
+
+// Helper function to get/update conversation history
+function getConversationHistory(chatId) {
+    if (!conversationHistory.has(chatId)) {
+        conversationHistory.set(chatId, []);
+    }
+    return conversationHistory.get(chatId);
+}
+
+function addToHistory(chatId, role, content) {
+    const history = getConversationHistory(chatId);
+    history.push({ role, content });
+    if (history.length > MAX_HISTORY * 2) { // *2 because we store user + assistant pairs
+        history.splice(0, 2); // Remove oldest pair
+    }
+}
+
+// Query Claude for personal/DM mode (with business data access, private history)
+async function askClaudePersonalWithData(question, businessData) {
+    try {
+        // Build business data context
+        let dataContext = "";
+        for (const [sheetName, data] of Object.entries(businessData)) {
+            dataContext += `\n=== ${sheetName} ===\n`;
+            if (data.length > 0) {
+                dataContext += data[0].join(' | ') + '\n';
+                dataContext += '-'.repeat(50) + '\n';
+                const rowsToShow = data.slice(1, 5001);
+                rowsToShow.forEach(row => {
+                    dataContext += row.join(' | ') + '\n';
+                });
+                if (data.length > 5001) {
+                    dataContext += `\n... and ${data.length - 5001} more rows\n`;
+                }
+            }
+        }
+
+        const systemPrompt = `You are JJ's personal AI assistant. You help with both personal matters (calendars, reminders, tasks, questions) AND business queries.
+
+You have access to the following business data:
+${dataContext}
+
+Rules:
+- Be friendly, helpful, and concise
+- Always reply in the same language the user used (Chinese/English)
+- This is a PRIVATE conversation - you can discuss anything freely
+- Help with personal tasks, reminders, calendars, and any questions
+- Also help with business data queries when asked`;
+
+        // Add to personal history
+        personalHistory.push({ role: "user", content: question });
+        if (personalHistory.length > MAX_PERSONAL_HISTORY * 2) {
+            personalHistory.splice(0, 2);
+        }
+
+        const response = await anthropic.messages.create({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            system: systemPrompt,
+            messages: personalHistory
+        });
+
+        const answer = response.content[0].text;
+
+        // Save response to history
+        personalHistory.push({ role: "assistant", content: answer });
+        if (personalHistory.length > MAX_PERSONAL_HISTORY * 2) {
+            personalHistory.splice(0, 2);
+        }
+
+        return answer;
+    } catch (error) {
+        console.error('Error querying Claude (personal):', error);
+        return "Sorry, I encountered an error. Please try again.";
+    }
+}
+
+// Query Claude with business context and memory
+async function askClaude(question, businessData, chatId) {
+    try {
+        // Format business data for context
+        let context = "You are a business assistant with access to the following data:\n\n";
+
+        for (const [sheetName, data] of Object.entries(businessData)) {
+            context += `\n=== ${sheetName} ===\n`;
+            if (data.length > 0) {
+                // Add headers
+                context += data[0].join(' | ') + '\n';
+                context += '-'.repeat(50) + '\n';
+                // Add up to 5000 rows
+                const rowsToShow = data.slice(1, 5001);
+                rowsToShow.forEach(row => {
+                    context += row.join(' | ') + '\n';
+                });
+                if (data.length > 5001) {
+                    context += `\n... and ${data.length - 5001} more rows\n`;
+                }
+            }
+            context += '\n';
+        }
+
+        context += "\n\nProvide a clear, concise answer based on the data above. If the data doesn't contain the information needed, say so politely.\n\nIMPORTANT: Always reply in the same language the user used. If they ask in Chinese, reply in Chinese. If they ask in English, reply in English. Match their language exactly.\n\nPRIVACY RULE: You must NEVER reveal or discuss any information from private conversations. If someone asks about what the admin/owner told you privately, or asks about personal matters, politely decline and say you can only help with business-related questions based on the data provided.";
+
+        // Build messages with conversation history
+        const history = getConversationHistory(chatId);
+        const messages = [
+            { role: "user", content: context }
+        ];
+
+        // Add conversation history
+        for (const msg of history) {
+            messages.push(msg);
+        }
+
+        // Add current question
+        messages.push({ role: "user", content: question });
+
+        const response = await anthropic.messages.create({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            system: context,
+            messages: messages.length > 1 ? messages.slice(1) : [{ role: "user", content: question }]
+        });
+
+        const answer = response.content[0].text;
+
+        // Save to history
+        addToHistory(chatId, "user", question);
+        addToHistory(chatId, "assistant", answer);
+
+        return answer;
+    } catch (error) {
+        console.error('Error querying Claude:', error);
+        return "Sorry, I encountered an error processing your question. Please try again.";
+    }
+}
+
+// WhatsApp Event Handlers
+client.on('qr', (qr) => {
+    console.log('\n📱 Scan this QR code with your WhatsApp:');
+    qrcode.generate(qr, { small: true });
+    console.log('\nOpen WhatsApp on your phone > Settings > Linked Devices > Link a Device');
+});
+
+client.on('ready', () => {
+    console.log('\n✅ WhatsApp Bot is ready!');
+    console.log('📞 Your bot is now listening for messages...\n');
+});
+
+client.on('authenticated', () => {
+    console.log('✅ WhatsApp authenticated successfully');
+});
+
+client.on('auth_failure', (msg) => {
+    console.error('❌ Authentication failed:', msg);
+});
+
+client.on('disconnected', (reason) => {
+    console.log('⚠️  WhatsApp disconnected:', reason);
+});
+
+// Handle incoming messages
+client.on('message', async (message) => {
+    try {
+        const chat = await message.getChat();
+        const contact = await message.getContact();
+
+        console.log(`\n📩 Message from ${contact.pushname || contact.number}: ${message.body}`);
+
+        // In groups, smart response logic
+        if (chat.isGroup) {
+            const botId = client.info.wid._serialized;
+            const botIdShort = client.info.wid.user; // Just the number without @c.us
+            const senderKey = `${chat.id._serialized}_${message.author || message.from}`;
+
+            // Check if bot was mentioned
+            const mentions = await message.getMentions();
+            const mentionedMe = mentions.some(c => c.id._serialized === botId);
+
+            // Also check mentionedIds as fallback
+            const mentionedInIds = message.mentionedIds && message.mentionedIds.some(id =>
+                id === botId || id.includes(botIdShort)
+            );
+
+            const startsWithBot = message.body.toLowerCase().startsWith('!bot ');
+            const startsWithJjbot = message.body.toLowerCase().startsWith('jjbot ');
+
+            // Check if replying to bot's message
+            const quotedMsg = await message.getQuotedMessage().catch(() => null);
+            const isReplyToBot = quotedMsg && quotedMsg.fromMe;
+
+            // Check if user has an active conversation (tagged bot recently)
+            const lastInteraction = activeGroupConversations.get(senderKey);
+            const hasActiveConversation = lastInteraction && (Date.now() - lastInteraction) < CONVERSATION_TIMEOUT;
+
+            // Decide if we should respond
+            const shouldRespond = mentionedMe || mentionedInIds || startsWithBot || startsWithJjbot || isReplyToBot || hasActiveConversation;
+
+            if (!shouldRespond) {
+                return;
+            }
+
+            // Update conversation timestamp if they triggered the bot
+            if (mentionedMe || mentionedInIds || startsWithBot || startsWithJjbot || isReplyToBot) {
+                activeGroupConversations.set(senderKey, Date.now());
+            } else if (hasActiveConversation) {
+                // Refresh the timeout for follow-up messages
+                activeGroupConversations.set(senderKey, Date.now());
+            }
+
+            // Remove the !bot or jjbot prefix if used
+            if (startsWithBot) {
+                message.body = message.body.substring(5).trim();
+            } else if (startsWithJjbot) {
+                message.body = message.body.substring(6).trim();
+            }
+        }
+
+        // Ignore messages from self
+        if (message.fromMe) {
+            return;
+        }
+
+        // Check if bot is enabled (admin can always use it)
+        const senderId = message.from;
+        const isAdmin = senderId === ADMIN_NUMBER;
+
+        if (!botSettings.enabled && !isAdmin) {
+            return;
+        }
+
+        // Show typing indicator
+        chat.sendStateTyping();
+
+        // Admin commands (only you can use these)
+        if (isAdmin && message.body.toLowerCase().startsWith('/admin')) {
+            const cmd = message.body.toLowerCase().replace('/admin', '').trim();
+
+            if (cmd === 'help') {
+                await message.reply(
+                    '🔐 *Admin Commands:*\n\n' +
+                    '/admin help - Show this menu\n' +
+                    '/admin status - Show bot status\n' +
+                    '/admin on - Enable bot\n' +
+                    '/admin off - Disable bot\n' +
+                    '/admin clearmemory - Clear all conversation history\n' +
+                    '/admin groups on - Enable group responses\n' +
+                    '/admin groups off - Disable group responses'
+                );
+                return;
+            }
+
+            if (cmd === 'status') {
+                await message.reply(
+                    '📊 *Bot Status:*\n\n' +
+                    `• Enabled: ${botSettings.enabled ? '✅ Yes' : '❌ No'}\n` +
+                    `• Groups: ${botSettings.respondInGroups ? '✅ Yes' : '❌ No'}\n` +
+                    `• Max Rows: ${botSettings.maxRows}\n` +
+                    `• Active Chats: ${conversationHistory.size}`
+                );
+                return;
+            }
+
+            if (cmd === 'on') {
+                botSettings.enabled = true;
+                await message.reply('✅ Bot is now *enabled*');
+                return;
+            }
+
+            if (cmd === 'off') {
+                botSettings.enabled = false;
+                await message.reply('❌ Bot is now *disabled* (only you can still use it)');
+                return;
+            }
+
+            if (cmd === 'clearmemory') {
+                conversationHistory.clear();
+                await message.reply('🧹 All conversation history cleared');
+                return;
+            }
+
+            if (cmd === 'groups on') {
+                botSettings.respondInGroups = true;
+                await message.reply('✅ Bot will now respond in groups');
+                return;
+            }
+
+            if (cmd === 'groups off') {
+                botSettings.respondInGroups = false;
+                await message.reply('❌ Bot will no longer respond in groups');
+                return;
+            }
+
+            await message.reply('Unknown admin command. Use /admin help');
+            return;
+        }
+
+        // Check group settings
+        if (chat.isGroup && !botSettings.respondInGroups && !isAdmin) {
+            return;
+        }
+
+        // Special commands
+        if (message.body.toLowerCase() === '/start' || message.body.toLowerCase() === 'hi' || message.body.toLowerCase() === 'hello') {
+            await message.reply(
+                '👋 Hello! I\'m your AI business assistant.\n\n' +
+                'I can help you with:\n' +
+                '• Check stock levels\n' +
+                '• Price inquiries\n' +
+                '• Sales data\n' +
+                '• Property information\n' +
+                '• Rental schedules\n' +
+                '• And more!\n\n' +
+                'Just ask me anything about your business data.'
+            );
+            return;
+        }
+
+        if (message.body.toLowerCase() === '/help') {
+            await message.reply(
+                '💡 Example questions:\n\n' +
+                '• "What\'s the current price for shark fin?"\n' +
+                '• "Show me stock levels for sea cucumber"\n' +
+                '• "What\'s my rental income this month?"\n' +
+                '• "List all customers from January"\n' +
+                '• "What are the upcoming loan payments?"\n\n' +
+                'Ask me anything!'
+            );
+            return;
+        }
+
+        // DM from admin - use personal assistant (private, with business data access)
+        if (!chat.isGroup && isAdmin) {
+            console.log('📱 Private DM from admin');
+            const businessData = await getAllBusinessData();
+            // Use personal history (separate from all group histories)
+            const answer = await askClaudePersonalWithData(message.body, businessData);
+            await message.reply(answer);
+            console.log(`✅ Private response sent`);
+            return;
+        }
+
+        // Groups - business only (shared with colleagues, NO access to personal/DM history)
+        const businessData = await getAllBusinessData();
+
+        if (Object.keys(businessData).length === 0) {
+            await message.reply('⚠️ Unable to access business data. Please check Google Sheets connection.');
+            return;
+        }
+
+        const chatId = chat.id._serialized;
+        const answer = await askClaude(message.body, businessData, chatId);
+        await message.reply(answer);
+
+        console.log(`✅ Response sent`);
+
+    } catch (error) {
+        console.error('Error handling message:', error);
+        await message.reply('Sorry, I encountered an error. Please try again.');
+    }
+});
+
+// Start the bot
+async function startBot() {
+    console.log('🚀 Starting WhatsApp Business Bot...\n');
+
+    // Check environment variables
+    if (!process.env.CLAUDE_API_KEY) {
+        console.error('❌ CLAUDE_API_KEY not found in .env file');
+        console.log('Please add your Claude API key to the .env file\n');
+        process.exit(1);
+    }
+
+    if (!process.env.GOOGLE_SHEET_ID) {
+        console.error('❌ GOOGLE_SHEET_ID not found in .env file');
+        console.log('Please add your Google Sheet ID to the .env file\n');
+        process.exit(1);
+    }
+
+    // Initialize Google Sheets
+    const sheetsInitialized = await initGoogleSheets();
+    if (!sheetsInitialized) {
+        console.log('\n⚠️  Continuing without Google Sheets - bot will have limited functionality');
+    }
+
+    // Initialize WhatsApp
+    client.initialize();
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+    console.log('\n\n👋 Shutting down bot...');
+    await client.destroy();
+    process.exit(0);
+});
+
+// Start
+startBot();
