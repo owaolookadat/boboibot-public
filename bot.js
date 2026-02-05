@@ -9,6 +9,7 @@ const url = require('url');
 const mongoose = require('mongoose');
 const { MongoStore } = require('wwebjs-mongo');
 const { processCsvFile } = require('./csvProcessor');
+const { processOutstandingCSV } = require('./outstandingProcessor');
 require('dotenv').config();
 
 // Admin Configuration
@@ -367,22 +368,45 @@ async function handleMessage(message) {
                         const tempFilePath = path.join(tempDir, `upload_${Date.now()}.csv`);
                         fs.writeFileSync(tempFilePath, media.data, 'base64');
 
-                        // Process the CSV
-                        const result = await processCsvFile(tempFilePath, sheetsAPI, SHEET_ID);
+                        // Detect CSV type by filename or content
+                        const filename = media.filename.toLowerCase();
+                        let result;
+
+                        if (filename.includes('outstanding') || filename.includes('listing')) {
+                            // Outstanding CSV - updates payment status
+                            console.log('📊 Detected Outstanding CSV');
+                            result = await processOutstandingCSV(tempFilePath, sheetsAPI, SHEET_ID);
+                        } else {
+                            // Invoice Detail Listing CSV - imports invoice data
+                            console.log('📋 Detected Invoice Detail CSV');
+                            result = await processCsvFile(tempFilePath, sheetsAPI, SHEET_ID);
+                        }
 
                         // Delete temp file
                         fs.unlinkSync(tempFilePath);
 
                         // Send result
                         if (result.success) {
-                            await message.reply(
-                                `✅ ${result.message}\n\n` +
-                                `📊 **Summary:**\n` +
-                                `• Total records: ${result.totalRecords}\n` +
-                                `• New records added: ${result.newRecords}\n` +
-                                `• Duplicates skipped: ${result.duplicates}\n` +
-                                `• Sheet: ${result.sheetName}`
-                            );
+                            if (result.updatedRows !== undefined) {
+                                // Outstanding CSV result
+                                await message.reply(
+                                    `✅ ${result.message}\n\n` +
+                                    `💰 **Payment Status Update:**\n` +
+                                    `• Rows updated: ${result.updatedRows}\n` +
+                                    `• Paid invoices: ${result.paidCount}\n` +
+                                    `• Unpaid invoices: ${result.unpaidCount}`
+                                );
+                            } else {
+                                // Invoice Detail CSV result
+                                await message.reply(
+                                    `✅ ${result.message}\n\n` +
+                                    `📊 **Summary:**\n` +
+                                    `• Total records: ${result.totalRecords}\n` +
+                                    `• New records added: ${result.newRecords}\n` +
+                                    `• Duplicates skipped: ${result.duplicates}\n` +
+                                    `• Sheet: ${result.sheetName}`
+                                );
+                            }
                         } else {
                             await message.reply(`❌ ${result.message}`);
                         }
