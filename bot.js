@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, RemoteAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { google } = require('googleapis');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const url = require('url');
+const mongoose = require('mongoose');
+const { MongoStore } = require('wwebjs-mongo');
 require('dotenv').config();
 
 // Admin Configuration
@@ -35,14 +37,11 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = path.join(__dirname, 'token.json');
 const CREDENTIALS_PATH = path.join(__dirname, 'oauth_credentials.json');
 
-// Initialize WhatsApp Client
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-});
+// MongoDB URI for persistent session storage
+const MONGODB_URI = process.env.MONGODB_URI;
+
+// WhatsApp client (initialized after MongoDB connection)
+let client;
 
 // Initialize Claude AI
 const anthropic = new Anthropic({
@@ -283,32 +282,60 @@ async function askClaude(question, businessData, chatId) {
     }
 }
 
-// WhatsApp Event Handlers
-client.on('qr', (qr) => {
-    console.log('\n📱 Scan this QR code with your WhatsApp:');
-    qrcode.generate(qr, { small: true });
-    console.log('\nOpen WhatsApp on your phone > Settings > Linked Devices > Link a Device');
-});
 
-client.on('ready', () => {
-    console.log('\n✅ WhatsApp Bot is ready!');
-    console.log('📞 Your bot is now listening for messages...\n');
-});
+// Initialize WhatsApp client with appropriate auth strategy
+async function initializeWhatsAppClient(store) {
+    const authStrategy = store
+        ? new RemoteAuth({
+            store: store,
+            backupSyncIntervalMs: 300000 // Backup session every 5 minutes
+          })
+        : new LocalAuth();
 
-client.on('authenticated', () => {
-    console.log('✅ WhatsApp authenticated successfully');
-});
+    client = new Client({
+        authStrategy: authStrategy,
+        puppeteer: {
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        }
+    });
 
-client.on('auth_failure', (msg) => {
-    console.error('❌ Authentication failed:', msg);
-});
+    // WhatsApp Event Handlers
+    client.on('qr', (qr) => {
+        console.log('\n📱 Scan this QR code with your WhatsApp:');
+        qrcode.generate(qr, { small: true });
+        console.log('\nOpen WhatsApp on your phone > Settings > Linked Devices > Link a Device');
+    });
 
-client.on('disconnected', (reason) => {
-    console.log('⚠️  WhatsApp disconnected:', reason);
-});
+    client.on('ready', () => {
+        console.log('\n✅ WhatsApp Bot is ready!');
+        console.log('📞 Your bot is now listening for messages...\n');
+    });
 
-// Handle incoming messages
-client.on('message', async (message) => {
+    client.on('authenticated', () => {
+        console.log('✅ WhatsApp authenticated successfully');
+    });
+
+    client.on('auth_failure', (msg) => {
+        console.error('❌ Authentication failed:', msg);
+    });
+
+    client.on('disconnected', (reason) => {
+        console.log('⚠️  WhatsApp disconnected:', reason);
+    });
+
+    client.on('remote_session_saved', () => {
+        console.log('💾 WhatsApp session saved to MongoDB');
+    });
+
+    // Handle incoming messages
+    client.on('message', handleMessage);
+
+    return client;
+}
+
+// Message handler (moved from inline)
+async function handleMessage(message) {
     try {
         const chat = await message.getChat();
         const contact = await message.getContact();
@@ -318,14 +345,11 @@ client.on('message', async (message) => {
         // In groups, smart response logic
         if (chat.isGroup) {
             const botId = client.info.wid._serialized;
-            const botIdShort = client.info.wid.user; // Just the number without @c.us
+            const botIdShort = client.info.wid.user;
             const senderKey = `${chat.id._serialized}_${message.author || message.from}`;
 
-            // Check if bot was mentioned
             const mentions = await message.getMentions();
             const mentionedMe = mentions.some(c => c.id._serialized === botId);
-
-            // Also check mentionedIds as fallback
             const mentionedInIds = message.mentionedIds && message.mentionedIds.some(id =>
                 id === botId || id.includes(botIdShort)
             );
@@ -333,30 +357,24 @@ client.on('message', async (message) => {
             const startsWithBot = message.body.toLowerCase().startsWith('!bot ');
             const startsWithJjbot = message.body.toLowerCase().startsWith('jjbot ');
 
-            // Check if replying to bot's message
             const quotedMsg = await message.getQuotedMessage().catch(() => null);
             const isReplyToBot = quotedMsg && quotedMsg.fromMe;
 
-            // Check if user has an active conversation (tagged bot recently)
             const lastInteraction = activeGroupConversations.get(senderKey);
             const hasActiveConversation = lastInteraction && (Date.now() - lastInteraction) < CONVERSATION_TIMEOUT;
 
-            // Decide if we should respond
             const shouldRespond = mentionedMe || mentionedInIds || startsWithBot || startsWithJjbot || isReplyToBot || hasActiveConversation;
 
             if (!shouldRespond) {
                 return;
             }
 
-            // Update conversation timestamp if they triggered the bot
             if (mentionedMe || mentionedInIds || startsWithBot || startsWithJjbot || isReplyToBot) {
                 activeGroupConversations.set(senderKey, Date.now());
             } else if (hasActiveConversation) {
-                // Refresh the timeout for follow-up messages
                 activeGroupConversations.set(senderKey, Date.now());
             }
 
-            // Remove the !bot or jjbot prefix if used
             if (startsWithBot) {
                 message.body = message.body.substring(5).trim();
             } else if (startsWithJjbot) {
@@ -364,12 +382,10 @@ client.on('message', async (message) => {
             }
         }
 
-        // Ignore messages from self
         if (message.fromMe) {
             return;
         }
 
-        // Check if bot is enabled (admin can always use it)
         const senderId = message.from;
         const isAdmin = senderId === ADMIN_NUMBER;
 
@@ -377,10 +393,9 @@ client.on('message', async (message) => {
             return;
         }
 
-        // Show typing indicator
         chat.sendStateTyping();
 
-        // Admin commands (only you can use these)
+        // Admin commands
         if (isAdmin && message.body.toLowerCase().startsWith('/admin')) {
             const cmd = message.body.toLowerCase().replace('/admin', '').trim();
 
@@ -399,12 +414,14 @@ client.on('message', async (message) => {
             }
 
             if (cmd === 'status') {
+                const usingMongo = !!MONGODB_URI;
                 await message.reply(
                     '📊 *Bot Status:*\n\n' +
                     `• Enabled: ${botSettings.enabled ? '✅ Yes' : '❌ No'}\n` +
                     `• Groups: ${botSettings.respondInGroups ? '✅ Yes' : '❌ No'}\n` +
                     `• Max Rows: ${botSettings.maxRows}\n` +
-                    `• Active Chats: ${conversationHistory.size}`
+                    `• Active Chats: ${conversationHistory.size}\n` +
+                    `• Session Storage: ${usingMongo ? '☁️ MongoDB (Persistent)' : '💾 Local'}`
                 );
                 return;
             }
@@ -443,7 +460,6 @@ client.on('message', async (message) => {
             return;
         }
 
-        // Check group settings
         if (chat.isGroup && !botSettings.respondInGroups && !isAdmin) {
             return;
         }
@@ -477,18 +493,17 @@ client.on('message', async (message) => {
             return;
         }
 
-        // DM from admin - use personal assistant (private, with business data access)
+        // DM from admin - personal mode
         if (!chat.isGroup && isAdmin) {
             console.log('📱 Private DM from admin');
             const businessData = await getAllBusinessData();
-            // Use personal history (separate from all group histories)
             const answer = await askClaudePersonalWithData(message.body, businessData);
             await message.reply(answer);
             console.log(`✅ Private response sent`);
             return;
         }
 
-        // Groups - business only (shared with colleagues, NO access to personal/DM history)
+        // Groups - business mode
         const businessData = await getAllBusinessData();
 
         if (Object.keys(businessData).length === 0) {
@@ -506,7 +521,7 @@ client.on('message', async (message) => {
         console.error('Error handling message:', error);
         await message.reply('Sorry, I encountered an error. Please try again.');
     }
-});
+}
 
 // Start the bot
 async function startBot() {
@@ -524,6 +539,26 @@ async function startBot() {
         console.log('Please add your Google Sheet ID to the .env file\n');
         process.exit(1);
     }
+
+    // Initialize MongoDB if URI is provided (for persistent session)
+    let store = null;
+    if (MONGODB_URI) {
+        try {
+            console.log('🔗 Connecting to MongoDB for persistent session...');
+            await mongoose.connect(MONGODB_URI);
+            store = new MongoStore({ mongoose: mongoose });
+            console.log('✅ MongoDB connected - WhatsApp session will persist across restarts!');
+        } catch (error) {
+            console.error('⚠️  MongoDB connection failed:', error.message);
+            console.log('Falling back to LocalAuth (session won\'t persist)\n');
+        }
+    } else {
+        console.log('ℹ️  No MONGODB_URI set - using LocalAuth (session stored locally)');
+        console.log('   To enable persistent sessions, add MONGODB_URI to .env\n');
+    }
+
+    // Initialize WhatsApp client
+    await initializeWhatsAppClient(store);
 
     // Initialize Google Sheets
     const sheetsInitialized = await initGoogleSheets();
