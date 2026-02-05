@@ -1,6 +1,6 @@
 # WhatsApp Business Bot - Project Status
 
-**Last Updated:** February 5, 2026
+**Last Updated:** February 5, 2026 (Evening Update)
 
 ---
 
@@ -21,6 +21,9 @@
 ✅ Personal mode for admin DMs
 ✅ MongoDB session persistence
 ✅ Multi-language support (English/Chinese)
+✅ **CSV File Upload & Processing (NEW!)**
+✅ **Invoice Detail Listing Import (NEW!)**
+✅ **Payment Status Tracking (NEW!)**
 
 ---
 
@@ -33,41 +36,80 @@
    - Access: Real-time reads via OAuth2
    - Contains: Current pricing and product data
 
-### Ready to Import
-2. **Invoice Detail Listing (CSV)**
+### CSV Import System (Operational)
+2. **Invoice Detail Listing (CSV Import)**
    - File: `Invoice Detail Listing.csv`
    - Size: 115 KB
    - Records: 2,100+ invoice line items
-   - Period: January 2025
-   - Status: 📁 **Local file, ready for Google Sheets import**
+   - Period: January 2025 - February 2026
+   - Status: ✅ **OPERATIONAL - Upload via WhatsApp**
+   - Import Method: Send CSV file directly to bot in WhatsApp
+   - Features:
+     - Automatic duplicate detection (by Invoice No + Item Code)
+     - Automatic payment status tracking (defaults to "Unpaid")
+     - Creates "Invoice Detail Listing" sheet automatically
+     - Appends new records without overwriting existing data
    - Contains:
      - Invoice numbers and dates
      - Customer codes and names
      - Product codes and descriptions
      - Quantities, prices, totals
-     - All from PHC Marine Product Sdn Bhd
+     - Payment status and payment date columns
+
+3. **Outstanding CSV Processor**
+   - File: `outstanding.csv` (or any filename with "outstanding")
+   - Purpose: Update payment statuses for existing invoices
+   - Status: ✅ **OPERATIONAL**
+   - Process:
+     - Matches invoices by Doc No (invoice number)
+     - If outstanding amount = 0 → marks all line items as "Paid"
+     - If outstanding amount > 0 → marks as "Unpaid"
+     - Updates ALL line items for each invoice automatically
+   - One-time use: Run whenever payment status needs updating
 
 ---
 
 ## 🎯 NEXT STEPS
 
+### Completed Today (Feb 5, 2026)
+✅ **CSV Upload System Built**
+   - Admin can upload CSV files via WhatsApp
+   - Automatic file type detection (Invoice Detail vs Outstanding)
+   - Duplicate detection and prevention
+   - Payment tracking columns added
+
+✅ **Payment Status Tracking**
+   - Outstanding CSV processor built
+   - Automatic status updates based on outstanding amounts
+   - Batch updates for all invoice line items
+
+✅ **Critical Bug Fixes**
+   - Fixed admin number mismatch (601111484198@c.us → 192053774397461@lid)
+   - Fixed document type detection for CSV files
+   - Added detailed debug logging for troubleshooting
+
 ### Immediate Tasks
-1. **Import Invoice Data to Google Sheets**
-   - Upload Invoice Detail Listing.csv to the connected Google Sheet
-   - Create new tab called "Invoice Detail Listing" or similar
-   - Bot will automatically read this data once imported
+1. **Test Outstanding CSV Import**
+   - Upload outstanding.csv to update payment statuses
+   - Verify all invoice line items update correctly
+   - Confirm paid/unpaid status accuracy
 
-2. **Add Invoice Query Features**
-   - Build commands for invoice lookup by customer
-   - Build commands for sales by date range
-   - Add product-specific sales analysis
-   - Customer purchase history queries
+2. **Manual Payment Update Commands** (Future)
+   - Add WhatsApp commands like `/payment paid IV-2501-001`
+   - Quick update for individual invoices via chat
+   - No need to upload CSV for daily updates
 
-3. **Enhanced Analytics**
+3. **Enhanced Invoice Queries**
+   - Commands for invoice lookup by customer
+   - Sales by date range analysis
+   - Product-specific sales reports
+   - Customer purchase history
+
+4. **Analytics Dashboard**
    - Monthly sales summaries
    - Top customers report
    - Best-selling products
-   - Pricing trend analysis
+   - Outstanding balance tracking
 
 ### Future Enhancements
 - Calendar/reminder integration
@@ -108,6 +150,12 @@
 - `/admin on/off` - Enable/disable bot
 - `/admin groups on/off` - Control group responses
 - `/admin clearmemory` - Clear conversation history
+
+**CSV Upload (Admin Only):**
+- Send CSV file directly to bot in WhatsApp
+- **Invoice Detail Listing.csv** → Imports invoice data with duplicate detection
+- **outstanding.csv** (or filename with "outstanding") → Updates payment statuses
+- Bot automatically detects file type and processes accordingly
 
 ### Group Chat Triggers
 Users can interact in groups by:
@@ -164,11 +212,31 @@ Users can interact in groups by:
 ✅ Session persistence - Solved with MongoDB
 ✅ Google Sheets access - OAuth2 configured
 ✅ Server disconnections - PM2 auto-restart enabled
+✅ CSV file upload not processing - Fixed admin number mismatch (Feb 5, 2026)
+✅ Document type detection - Fixed for CSV files (Feb 5, 2026)
+
+### Critical Lessons Learned (Feb 5, 2026)
+
+**Admin Number Format Issue:**
+- WhatsApp IDs in groups use `@lid` format (e.g., `192053774397461@lid`)
+- Direct message IDs use `@c.us` format (e.g., `601234567890@c.us`)
+- **Always verify sender ID from logs before setting ADMIN_NUMBER**
+- See TROUBLESHOOTING.md for detailed diagnostic steps
+
+**CSV Upload Troubleshooting:**
+1. Check admin authentication first (most common issue)
+2. Verify file type detection with debug logs
+3. Ensure code is deployed to server (git pull + pm2 restart)
+4. Use verification scripts: `bash verify-deployment.sh`
+
+For detailed troubleshooting guide, see **TROUBLESHOOTING.md**
 
 ### Monitoring
-- Check logs: `pm2 logs whatsapp-bot`
+- Check logs: `pm2 logs boboibot`
 - Check status: `pm2 status`
-- Restart if needed: `pm2 restart whatsapp-bot`
+- Restart if needed: `pm2 restart boboibot`
+- Verify deployment: `bash verify-deployment.sh`
+- Force update: `bash force-update.sh`
 
 ---
 
@@ -193,16 +261,20 @@ Users can interact in groups by:
 
 ### Project Structure
 ```
-whatsapp-business-bot/
+boboibot/
 ├── bot.js                      # Main application
+├── csvProcessor.js             # Invoice Detail CSV import
+├── outstandingProcessor.js     # Payment status updates
 ├── auth.js                     # Google OAuth setup
 ├── package.json                # Dependencies
 ├── .env                        # Configuration (SECRET)
 ├── oauth_credentials.json      # Google credentials (SECRET)
 ├── token.json                  # Google token (SECRET)
-├── Invoice Detail Listing.csv  # Data ready for import
+├── verify-deployment.sh        # Deployment verification script
+├── force-update.sh             # Force sync & restart script
 ├── CODEBASE_DOCUMENTATION.md   # Technical docs
-├── PROJECT_STATUS.md           # This file
+├── PROJECT_STATUS.md           # This file (status & roadmap)
+├── TROUBLESHOOTING.md          # Issue resolution guide
 └── README.md                   # Setup guide
 ```
 
