@@ -13,7 +13,7 @@ const { processOutstandingCSV } = require('./outstandingProcessor');
 require('dotenv').config();
 
 // Admin Configuration
-const ADMIN_NUMBER = '601111484198@c.us'; // Only admin can change settings
+const ADMIN_NUMBER = process.env.ADMIN_NUMBER || '192053774397461@lid'; // Only admin can change settings
 
 // Conversation Memory (stores last 10 messages per chat)
 const conversationHistory = new Map();
