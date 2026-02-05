@@ -4,7 +4,7 @@ const path = require('path');
 const http = require('http');
 const url = require('url');
 
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets']; // Read AND write access
 const TOKEN_PATH = path.join(__dirname, 'token.json');
 const CREDENTIALS_PATH = path.join(__dirname, 'oauth_credentials.json');
 

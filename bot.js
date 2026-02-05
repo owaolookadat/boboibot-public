@@ -8,6 +8,7 @@ const http = require('http');
 const url = require('url');
 const mongoose = require('mongoose');
 const { MongoStore } = require('wwebjs-mongo');
+const { processCsvFile } = require('./csvProcessor');
 require('dotenv').config();
 
 // Admin Configuration
@@ -33,7 +34,7 @@ const personalHistory = [];
 const MAX_PERSONAL_HISTORY = 20;
 
 // OAuth2 Configuration
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets']; // Changed to allow read AND write
 const TOKEN_PATH = path.join(__dirname, 'token.json');
 const CREDENTIALS_PATH = path.join(__dirname, 'oauth_credentials.json');
 
@@ -341,6 +342,60 @@ async function handleMessage(message) {
         const contact = await message.getContact();
 
         console.log(`\n📩 Message from ${contact.pushname || contact.number}: ${message.body}`);
+
+        // Handle file uploads (CSV processing) - Admin only
+        if (message.hasMedia) {
+            const senderId = message.from;
+            const isAdmin = senderId === ADMIN_NUMBER;
+
+            if (isAdmin) {
+                const media = await message.downloadMedia();
+
+                // Check if it's a CSV file
+                if (media.filename && (media.filename.endsWith('.csv') || media.mimetype === 'text/csv')) {
+                    console.log('📄 CSV file received from admin');
+                    await message.reply('📥 Processing your CSV file...');
+
+                    try {
+                        // Create temp directory if doesn't exist
+                        const tempDir = path.join(__dirname, 'temp');
+                        if (!fs.existsSync(tempDir)) {
+                            fs.mkdirSync(tempDir);
+                        }
+
+                        // Save file temporarily
+                        const tempFilePath = path.join(tempDir, `upload_${Date.now()}.csv`);
+                        fs.writeFileSync(tempFilePath, media.data, 'base64');
+
+                        // Process the CSV
+                        const result = await processCsvFile(tempFilePath, sheetsAPI, SHEET_ID);
+
+                        // Delete temp file
+                        fs.unlinkSync(tempFilePath);
+
+                        // Send result
+                        if (result.success) {
+                            await message.reply(
+                                `✅ ${result.message}\n\n` +
+                                `📊 **Summary:**\n` +
+                                `• Total records: ${result.totalRecords}\n` +
+                                `• New records added: ${result.newRecords}\n` +
+                                `• Duplicates skipped: ${result.duplicates}\n` +
+                                `• Sheet: ${result.sheetName}`
+                            );
+                        } else {
+                            await message.reply(`❌ ${result.message}`);
+                        }
+
+                        return; // Don't process further
+                    } catch (error) {
+                        console.error('Error processing CSV:', error);
+                        await message.reply('❌ Error processing CSV file. Please check the file format and try again.');
+                        return;
+                    }
+                }
+            }
+        }
 
         // In groups, smart response logic
         if (chat.isGroup) {

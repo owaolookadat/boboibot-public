@@ -8,6 +8,10 @@ token.json
 .wwebjs_auth/
 .wwebjs_cache/
 
+# Temporary files
+temp/
+*.csv
+
 # Dependencies
 node_modules/
 

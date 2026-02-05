@@ -4,10 +4,25 @@
 An AI-powered WhatsApp bot that answers business questions by reading data from Google Sheets, with separate personal assistant mode for the admin.
 
 **Created:** February 2025
+**Last Updated:** February 5, 2026
+**Status:** ✅ **LIVE on AWS Lightsail**
 **Admin Number:** 601111484198
-**Tech Stack:** Node.js, whatsapp-web.js, Google Sheets API (OAuth2), Anthropic Claude API
+**Company:** PHC Marine Product Sdn Bhd (934074-A)
+**Tech Stack:** Node.js, whatsapp-web.js, Google Sheets API (OAuth2), Anthropic Claude API, MongoDB, AWS Lightsail
 
 ---
+
+## Current Deployment Status
+
+**Production Environment:**
+- **Hosting:** AWS Lightsail (running 24/7)
+- **Session Storage:** MongoDB Atlas (persistent WhatsApp sessions)
+- **Data Source:** Google Sheets - "PHC Price Data" (Sheet ID: 1IzNLzBwbcoWyXGww7HtQ0eMoC6eMPMIG8dMQHOZjFbQ)
+- **Bot Status:** Active and responding to messages
+
+**Available Data:**
+- Invoice Detail Listing (CSV file ready for import - 2,100+ invoice line items from Jan 2025)
+- PHC Price Data (currently connected Google Sheet)
 
 ## Architecture
 
@@ -18,27 +33,39 @@ An AI-powered WhatsApp bot that answers business questions by reading data from 
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   whatsapp-web.js                           │
-│              (QR Code Auth, Message Handling)               │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     bot.js (Main Logic)                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Message Router                                      │   │
-│  │  - Groups: Business mode (askClaude)                │   │
-│  │  - Admin DM: Personal mode (askClaudePersonalWithData)│  │
-│  └─────────────────────────────────────────────────────┘   │
-└──────────┬──────────────────────────────┬───────────────────┘
-           │                              │
-           ▼                              ▼
-┌──────────────────────┐    ┌──────────────────────────────┐
-│   Google Sheets API  │    │      Anthropic Claude API    │
-│   (OAuth2 Auth)      │    │   (claude-sonnet-4-20250514) │
-│   - Read business    │    │   - Generate responses       │
-│     data (5000 rows) │    │   - Conversation memory      │
-└──────────────────────┘    └──────────────────────────────┘
+│                   AWS Lightsail Server                      │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              whatsapp-web.js                         │  │
+│  │         (RemoteAuth + MongoDB Storage)               │  │
+│  └────────────────────┬─────────────────────────────────┘  │
+│                       │                                     │
+│                       ▼                                     │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              bot.js (Main Logic)                     │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Message Router                                 │  │  │
+│  │  │  - Groups: Business mode (askClaude)           │  │  │
+│  │  │  - Admin DM: Personal mode (askClaudePersonal) │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  └──────────┬─────────────────────────┬─────────────────┘  │
+└─────────────┼─────────────────────────┼────────────────────┘
+              │                         │
+              ▼                         ▼
+┌─────────────────────────┐    ┌──────────────────────────────┐
+│  MongoDB Atlas (Cloud)  │    │   Google Sheets API          │
+│  - WhatsApp session     │    │   (OAuth2 Auth)              │
+│  - Persistent storage   │    │   - PHC Price Data           │
+│  - Auto backup          │    │   - Real-time reads          │
+└─────────────────────────┘    │   - 5000 rows per sheet      │
+                               └──────────┬───────────────────┘
+                                          │
+                                          ▼
+                               ┌──────────────────────────────┐
+                               │  Anthropic Claude API        │
+                               │  (claude-sonnet-4-20250514)  │
+                               │  - Natural language queries  │
+                               │  - Conversation memory       │
+                               └──────────────────────────────┘
 ```
 
 ---
@@ -62,15 +89,40 @@ whatsapp-business-bot/
 
 ---
 
+## Business Context
+
+### Company Information
+**Name:** PHC Marine Product Sdn Bhd (934074-A)
+**Industry:** Seafood Trading (Marine Products)
+**Primary Products:**
+- Shark Fin (dried, frozen)
+- Sea Cucumber (various grades)
+- Fish Maw (dried, frozen)
+- Abalone (canned, dried)
+- Conch (dried)
+- Scallops
+- Other premium seafood products
+
+### Bot Use Cases
+1. **Price Inquiries** - Check current prices for products
+2. **Invoice Lookup** - Find customer invoices by date, product, or customer
+3. **Sales Analysis** - Track sales patterns and top products
+4. **Customer Management** - View customer purchase history
+5. **Product Information** - Get details about product codes and descriptions
+
+---
+
 ## Core Components
 
 ### 1. Authentication
 
 #### WhatsApp Authentication
-- Uses `LocalAuth` strategy from whatsapp-web.js
-- Session stored in `.wwebjs_auth/session/`
-- QR code displayed in terminal for initial linking
-- Auto-reconnects using saved session
+- **Production:** Uses `RemoteAuth` with MongoDB for persistent sessions across server restarts
+- **Fallback:** LocalAuth if MongoDB connection fails
+- Session stored in MongoDB Atlas (cloud) for production reliability
+- QR code displayed in terminal for initial linking (one-time setup)
+- Auto-reconnects using saved session from MongoDB
+- Session backup every 5 minutes to prevent data loss
 
 #### Google Sheets Authentication (OAuth2)
 - **Why OAuth2?** Organization blocked service account keys
@@ -234,6 +286,7 @@ Rules:
 ```
 CLAUDE_API_KEY=sk-ant-api03-...
 GOOGLE_SHEET_ID=1IzNLzBwbcoWyXGww7HtQ0eMoC6eMPMIG8dMQHOZjFbQ
+MONGODB_URI=mongodb+srv://... (optional, enables persistent sessions)
 ```
 
 ### Admin Configuration (in bot.js)
@@ -245,16 +298,40 @@ const ADMIN_NUMBER = '601111484198@c.us';
 
 ## Running the Bot
 
+### Production (AWS Lightsail)
+**Current Status:** ✅ Running 24/7
+
+The bot is deployed on AWS Lightsail and runs continuously using PM2 process manager.
+
+**AWS Lightsail Commands:**
+```bash
+# SSH into the server
+ssh -i key.pem user@aws-lightsail-ip
+
+# Check bot status
+pm2 status
+
+# View logs
+pm2 logs whatsapp-bot
+
+# Restart bot
+pm2 restart whatsapp-bot
+
+# Stop bot
+pm2 stop whatsapp-bot
+```
+
 ### Local Development
 ```bash
-cd C:\Users\user\Downloads\whatsapp-business-bot\whatsapp-business-bot
+cd C:\Users\user\Desktop\boboibot\whatsapp-business-bot
 npm install          # Install dependencies
 node auth.js         # Authenticate with Google (first time only)
 npm start            # Start the bot
 ```
 
 ### Stopping the Bot
-- Press `Ctrl+C` in terminal
+- **Production:** Use `pm2 stop whatsapp-bot`
+- **Local:** Press `Ctrl+C` in terminal
 - Graceful shutdown handler closes WhatsApp connection properly
 
 ---
@@ -268,6 +345,8 @@ npm start            # Start the bot
 | googleapis | ^128.0.0 | Google Sheets API |
 | dotenv | ^16.3.1 | Load environment variables |
 | @anthropic-ai/sdk | ^0.39.0 | Claude AI API |
+| mongoose | ^8.x | MongoDB ODM for session storage |
+| wwebjs-mongo | ^2.x | WhatsApp session storage adapter for MongoDB |
 
 ---
 
@@ -286,12 +365,39 @@ npm start            # Start the bot
 
 ---
 
-## Future Improvements (Planned)
+## Current Business Data
 
+### Connected Google Sheet: "PHC Price Data"
+- **Sheet ID:** 1IzNLzBwbcoWyXGww7HtQ0eMoC6eMPMIG8dMQHOZjFbQ
+- **Purpose:** Marine product pricing and sales data
+- **Update Frequency:** Real-time (reads on every query)
+
+### Available for Import: Invoice Detail Listing
+- **File:** Invoice Detail Listing.csv (115 KB)
+- **Records:** 2,100+ invoice line items
+- **Date Range:** January 2025
+- **Contains:**
+  - Item codes and descriptions
+  - Quantities and prices
+  - Customer information
+  - Invoice numbers and dates
+  - Product categories (shark fin, sea cucumber, fish maw, abalone, etc.)
+- **Status:** Ready to be imported into Google Sheets
+
+## Planned Improvements
+
+### Phase 1 - Data Enhancement (Current)
+1. ✅ **Cloud Deployment** - AWS Lightsail (COMPLETED)
+2. ✅ **Persistent Sessions** - MongoDB integration (COMPLETED)
+3. 🔄 **Import Invoice Data** - Add Invoice Detail Listing to Google Sheets
+4. 🔄 **Enhanced Queries** - Add specific invoice/sales analysis commands
+
+### Phase 2 - Advanced Features
 1. **Calendar Integration** - Personal reminders and scheduling
-2. **Cloud Deployment** - Railway hosting for 24/7 operation
-3. **Persistent Memory** - Save conversation history to file/database
-4. **Multi-language Detection** - Better language matching
+2. **Multi-language Detection** - Better language matching
+3. **Sales Analytics** - Automatic reports and insights
+4. **Customer Management** - Track customer purchase history
+5. **Inventory Alerts** - Low stock notifications
 
 ---
 
@@ -320,6 +426,13 @@ npm start            # Start the bot
 ---
 
 ## Changelog
+
+### v1.1.0 (February 5, 2026) - CURRENT
+- ✅ **Deployed to AWS Lightsail** - Bot running 24/7 in production
+- ✅ **MongoDB Integration** - Persistent WhatsApp sessions across server restarts
+- ✅ **RemoteAuth Strategy** - Session backup to cloud every 5 minutes
+- 📁 **Invoice Data Ready** - Invoice Detail Listing.csv prepared for import (2,100+ records)
+- 🔄 **Active Development** - Adding new modules and improving functionality
 
 ### v1.0.0 (February 2025)
 - Initial release
