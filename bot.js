@@ -348,14 +348,18 @@ async function handleMessage(message) {
         // Handle file uploads (CSV processing) - Admin only
         // Check for both media and document types (CSV files are often type "document")
         if (message.hasMedia || message.type === 'document') {
+            console.log('🔍 File detected, checking admin status...');
             const senderId = message.from;
             const isAdmin = senderId === ADMIN_NUMBER;
+            console.log(`👤 Sender: ${senderId}, isAdmin: ${isAdmin}, ADMIN_NUMBER: ${ADMIN_NUMBER}`);
 
             if (isAdmin) {
+                console.log('📥 Downloading media...');
                 const media = await message.downloadMedia();
+                console.log(`📁 Media downloaded: filename=${media?.filename}, mimetype=${media?.mimetype}`);
 
                 // Check if it's a CSV file
-                if (media.filename && (media.filename.endsWith('.csv') || media.mimetype === 'text/csv')) {
+                if (media && media.filename && (media.filename.endsWith('.csv') || media.mimetype === 'text/csv')) {
                     console.log('📄 CSV file received from admin');
                     await message.reply('📥 Processing your CSV file...');
 
@@ -419,7 +423,11 @@ async function handleMessage(message) {
                         await message.reply('❌ Error processing CSV file. Please check the file format and try again.');
                         return;
                     }
+                } else {
+                    console.log('⚠️ Not a CSV file, skipping processing');
                 }
+            } else {
+                console.log('⚠️ File received from non-admin, ignoring');
             }
         }
 
