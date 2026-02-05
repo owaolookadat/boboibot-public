@@ -83,6 +83,37 @@ pm2 start bot.js --name boboibot
 pm2 save
 ```
 
+#### 5. CSV Column Mapping Incorrect
+**Problem:** CSV processor is reading wrong columns, resulting in blank data or parsing errors.
+
+**How to diagnose:**
+- Check bot logs for "Found X records" - if count is 0 or very low, column mapping is wrong
+- Manually count columns in the actual CSV file (open in text editor)
+- Check if CSV has header rows that need to be skipped
+
+**Solution:**
+1. Open CSV file in text editor (not Excel)
+2. Count actual column positions (0-indexed)
+3. Update processor file with correct column indices
+4. For Outstanding CSV: Ensure using simplified format (Invoice No, Total, Outstanding)
+
+**Example - Outstanding CSV:**
+```javascript
+// Correct format: 3 columns only
+const outstandingData = records
+    .filter(row => row[0] && row[0].startsWith('IV-'))
+    .map(row => ({
+        invoiceNo: row[0],      // Column 0: Invoice Number
+        total: row[1],          // Column 1: Total Amount
+        outstanding: parseFloat((row[2] || '0').toString().replace(/,/g, '')) // Column 2: Outstanding
+    }));
+```
+
+**Tip:** If CSV has complex headers, clean it first:
+- Export only essential columns (Invoice No, Total, Outstanding)
+- Remove header rows and footer rows
+- Keep only data rows starting with invoice numbers
+
 ### CSV File Detection Not Working
 
 **Symptom:** Bot processes the wrong CSV type (e.g., Outstanding CSV treated as Invoice Detail).
