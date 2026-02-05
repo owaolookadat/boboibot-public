@@ -12,10 +12,10 @@ function parseOutstandingCSV(filePath) {
     try {
         const fileContent = fs.readFileSync(filePath, 'utf-8');
 
-        // Parse CSV - skip first 5 rows (header formatting)
+        // Parse CSV - simplified format with only 3 columns: Invoice No, Total, Outstanding
         const records = parse(fileContent, {
             skip_empty_lines: true,
-            from_line: 6, // Start from line 6 (first data row)
+            from_line: 1, // Start from line 1 (first data row in cleaned CSV)
             relax_column_count: true,
             relax_quotes: true
         });
@@ -24,16 +24,14 @@ function parseOutstandingCSV(filePath) {
         const outstandingData = records
             .filter(row => row[0] && row[0].startsWith('IV-')) // Has invoice number
             .map(row => {
-                // Clean and parse outstanding amount
-                let outstandingStr = (row[18] || '0').toString().replace(/,/g, '');
+                // Clean and parse outstanding amount from column 2
+                let outstandingStr = (row[2] || '0').toString().replace(/,/g, '');
                 const outstanding = parseFloat(outstandingStr) || 0;
 
                 return {
                     invoiceNo: row[0] || '',           // Doc No (col 0)
-                    date: row[4] || '',                // Date (col 4)
-                    customerCode: row[5] || '',        // Code (col 5)
-                    customerName: row[7] || '',        // Debtor Name (col 7)
-                    outstanding: outstanding           // Outstanding amount
+                    total: row[1] || '',               // Total amount (col 1)
+                    outstanding: outstanding           // Outstanding amount (col 2)
                 };
             });
 
