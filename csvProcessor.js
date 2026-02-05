@@ -24,20 +24,21 @@ function parseCSV(filePath) {
         const cleanedData = records
             .filter(row => row[1] || row[5]) // Has Item Code OR Description
             .map(row => {
-                // Extract columns: Item Code, Desc, Qty, Unit Price, Disc, Curr, Sub Total, Doc No, Date, Debtor Code, Debtor, Description
+                // Extract columns based on AutoCount CSV format
+                // Verified column positions from actual CSV structure
                 return [
-                    row[1] || '',   // Item Code
-                    row[5] || '',   // Description
-                    row[8] || '',   // Qty
-                    row[11] || '',  // Unit Price
-                    row[13] || '',  // Disc
-                    row[17] || '',  // Currency
-                    row[20] || '',  // Sub Total
-                    row[23] || '',  // Doc No
-                    row[25] || '',  // Date
-                    row[27] || '',  // Debtor Code
-                    row[30] || '',  // Debtor
-                    row[33] || ''   // Additional Description
+                    row[1] || '',   // Item Code (col 1)
+                    row[5] || '',   // Description (col 5)
+                    row[8] || '',   // Qty (col 8)
+                    row[11] || '',  // Unit Price (col 11)
+                    row[13] || '',  // Discount (col 13)
+                    row[18] || '',  // Currency (col 18 - RM)
+                    row[20] || '',  // Sub Total (col 20)
+                    row[21] || '',  // Doc No (col 21 - Invoice number)
+                    row[23] || '',  // Date (col 23)
+                    row[25] || '',  // Debtor Code (col 25)
+                    row[27] || '',  // Debtor Name (col 27)
+                    row[29] || ''   // Additional Notes (col 29)
                 ];
             });
 
