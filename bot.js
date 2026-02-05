@@ -343,9 +343,11 @@ async function handleMessage(message) {
         const contact = await message.getContact();
 
         console.log(`\n📩 Message from ${contact.pushname || contact.number}: ${message.body}`);
+        console.log(`📋 Message type: ${message.type}, hasMedia: ${message.hasMedia}`);
 
         // Handle file uploads (CSV processing) - Admin only
-        if (message.hasMedia) {
+        // Check for both media and document types (CSV files are often type "document")
+        if (message.hasMedia || message.type === 'document') {
             const senderId = message.from;
             const isAdmin = senderId === ADMIN_NUMBER;
 
