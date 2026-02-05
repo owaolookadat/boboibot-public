@@ -22,15 +22,15 @@ function parseCSV(filePath) {
 
         // Filter out empty rows and extract relevant columns
         const cleanedData = records
-            .filter(row => row[1] || row[5]) // Has Item Code OR Description
+            .filter(row => row[1] || row[4]) // Has Item Code OR Description
             .map(row => {
                 // Extract columns based on AutoCount CSV format
                 // Verified column positions from actual CSV structure
                 return [
                     row[1] || '',   // Item Code (col 1)
-                    row[5] || '',   // Description (col 5)
-                    row[8] || '',   // Qty (col 8)
-                    row[11] || '',  // Unit Price (col 11)
+                    row[4] || '',   // Description (col 4) - FIXED!
+                    row[7] || '',   // Qty (col 7) - FIXED!
+                    row[10] || '',  // Unit Price (col 10) - FIXED!
                     row[13] || '',  // Discount (col 13)
                     row[18] || '',  // Currency (col 18 - RM)
                     row[20] || '',  // Sub Total (col 20)
