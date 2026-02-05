@@ -368,11 +368,11 @@ async function handleMessage(message) {
                         const tempFilePath = path.join(tempDir, `upload_${Date.now()}.csv`);
                         fs.writeFileSync(tempFilePath, media.data, 'base64');
 
-                        // Detect CSV type by filename or content
+                        // Detect CSV type by filename
                         const filename = media.filename.toLowerCase();
                         let result;
 
-                        if (filename.includes('outstanding') || filename.includes('listing')) {
+                        if (filename.includes('outstanding')) {
                             // Outstanding CSV - updates payment status
                             console.log('📊 Detected Outstanding CSV');
                             result = await processOutstandingCSV(tempFilePath, sheetsAPI, SHEET_ID);
