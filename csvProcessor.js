@@ -38,7 +38,9 @@ function parseCSV(filePath) {
                     row[23] || '',  // Date (col 23)
                     row[25] || '',  // Debtor Code (col 25)
                     row[27] || '',  // Debtor Name (col 27)
-                    row[29] || ''   // Additional Notes (col 29)
+                    row[29] || '',  // Additional Notes (col 29)
+                    'Unpaid',       // Payment Status (col M) - NEW!
+                    ''              // Payment Date (col N) - NEW!
                 ];
             });
 
@@ -54,7 +56,7 @@ async function getExistingData(sheetsAPI, sheetId, sheetName) {
     try {
         const response = await sheetsAPI.spreadsheets.values.get({
             spreadsheetId: sheetId,
-            range: `${sheetName}!A:L`, // Columns A to L
+            range: `${sheetName}!A:N`, // Columns A to N (added payment columns)
         });
 
         return response.data.values || [];
@@ -86,7 +88,7 @@ async function appendToSheet(sheetsAPI, sheetId, sheetName, data) {
     try {
         await sheetsAPI.spreadsheets.values.append({
             spreadsheetId: sheetId,
-            range: `${sheetName}!A:L`,
+            range: `${sheetName}!A:N`,
             valueInputOption: 'RAW',
             resource: {
                 values: data
@@ -129,12 +131,13 @@ async function ensureSheetExists(sheetsAPI, sheetId, sheetName) {
             const headers = [
                 'Item Code', 'Description', 'Qty', 'Unit Price',
                 'Discount', 'Currency', 'Sub Total', 'Doc No',
-                'Date', 'Debtor Code', 'Debtor', 'Notes'
+                'Date', 'Debtor Code', 'Debtor', 'Notes',
+                'Payment Status', 'Payment Date'
             ];
 
             await sheetsAPI.spreadsheets.values.update({
                 spreadsheetId: sheetId,
-                range: `${sheetName}!A1:L1`,
+                range: `${sheetName}!A1:N1`,
                 valueInputOption: 'RAW',
                 resource: {
                     values: [headers]
