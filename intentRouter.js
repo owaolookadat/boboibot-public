@@ -52,10 +52,11 @@ AVAILABLE INTENTS:
    Examples: "How many invoices?", "total sales", "invoice count for January"
 
 4. "invoice_details" - User wants to see specific invoice details
-   Examples: "Show invoice IV-123", "details for IV-456", "what's in invoice X"
+   Examples: "Show invoice IV-123", "details for 2501006", "what's in invoice X"
+   Note: Invoice numbers can be in formats: IV-2501-006, 2501006, IV2501006
 
 5. "customer_query" - General queries about a specific customer
-   Examples: "Show me X's invoices", "recent orders for X", "X's history"
+   Examples: "Show me X's invoices", "recent orders for X", "X's history", "X's unpaid invoices"
 
 6. "general_query" - Everything else that needs AI analysis
    Examples: "Why did sales drop?", "Compare X and Y", "trend analysis"
@@ -74,6 +75,12 @@ RULES:
 - Match customer names from the list above (case-insensitive partial match is OK)
 - If question mentions "tekka", "tekkah", or similar, match to "TEKKAH FROZEN SEAFOOD"
 - If question mentions "chef tam", match to "CHEF TAM CANTONESE CUISINE"
+- Detect invoice numbers in ANY format:
+  * "IV-2501-006" (standard)
+  * "2501006" (7 digits, no prefix/dashes)
+  * "IV2501006" (no dashes)
+  * "2501-006" (missing IV prefix)
+  Extract and normalize to "invoiceNumber" field
 - Use "zh" if question contains Chinese characters, otherwise "en"
 - Set confidence high (0.8+) only if very clear
 - For ambiguous queries, use "general_query" with lower confidence`;
@@ -141,7 +148,10 @@ async function routeQuery(intent, question, businessData, handlers) {
         checkPaymentStatus,
         formatPaymentStatus,
         getInvoiceStats,
-        // Future handlers can be added here
+        getInvoiceDetails,
+        formatInvoiceDetails,
+        getCustomerInvoices,
+        formatCustomerInvoices
     } = handlers;
 
     // Only route if confidence is high enough
@@ -177,17 +187,70 @@ async function routeQuery(intent, question, businessData, handlers) {
 
             case 'invoice_stats':
                 console.log(`📊 Routing to invoice stats handler`);
-                // This could call getInvoiceStats() if you want
-                // For now, let AI handle it with filtered data
+                // For now, let AI handle stats queries with filtered data
+                // Could route to getInvoiceStats() in the future
                 return { handled: false, response: null, useAI: true };
+
+            case 'invoice_details':
+                if (!intent.invoiceNumber) {
+                    console.log('❌ Invoice details query but no invoice number identified');
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                console.log(`📋 Routing to invoice details for ${intent.invoiceNumber}`);
+                const invoiceData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!invoiceData) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const invoiceDetails = getInvoiceDetails(invoiceData, intent.invoiceNumber);
+                const detailsResponse = formatInvoiceDetails(invoiceDetails, intent.language);
+
+                return {
+                    handled: true,
+                    response: detailsResponse,
+                    useAI: false,
+                    intent: 'invoice_details'
+                };
+
+            case 'customer_query':
+                if (!intent.customer) {
+                    console.log('❌ Customer query but no customer identified');
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                console.log(`📊 Routing to customer invoices for ${intent.customer}`);
+                const customerInvoiceData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!customerInvoiceData) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                // Check if they want unpaid only
+                const filters = {
+                    limit: 20 // Show last 20 invoices
+                };
+
+                if (question.toLowerCase().includes('unpaid') || question.toLowerCase().includes('欠') || question.toLowerCase().includes('未付')) {
+                    filters.unpaidOnly = true;
+                }
+
+                const customerInvoices = getCustomerInvoices(customerInvoiceData, intent.customer, filters);
+                const customerResponse = formatCustomerInvoices(customerInvoices, intent.language);
+
+                return {
+                    handled: true,
+                    response: customerResponse,
+                    useAI: false,
+                    intent: 'customer_query'
+                };
 
             case 'payment_update':
                 // This is handled separately by parsePaymentCommand in bot.js
                 // Don't intercept here
                 return { handled: false, response: null, useAI: true };
 
-            case 'invoice_details':
-            case 'customer_query':
             case 'general_query':
             default:
                 // Use AI with smart filtering

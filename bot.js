@@ -17,6 +17,7 @@ const { smartFilter, extractCustomerKeywords } = require('./smartDataFilter');
 const { initRedis, getCached, setCached, invalidateCache, clearAllCache, getCacheStats } = require('./cacheManager');
 const { checkPaymentStatus, formatPaymentStatus, isPaymentQuery, detectLanguage } = require('./paymentChecker');
 const { classifyIntent, routeQuery } = require('./intentRouter');
+const { getInvoiceDetails, formatInvoiceDetails, getCustomerInvoices, formatCustomerInvoices } = require('./invoiceDetailsHandler');
 require('dotenv').config();
 
 // Admin Configuration
@@ -808,7 +809,11 @@ async function handleMessage(message) {
         const routeResult = await routeQuery(intent, message.body, businessData, {
             checkPaymentStatus,
             formatPaymentStatus,
-            getInvoiceStats
+            getInvoiceStats,
+            getInvoiceDetails,
+            formatInvoiceDetails,
+            getCustomerInvoices,
+            formatCustomerInvoices
         });
 
         if (routeResult.handled) {
