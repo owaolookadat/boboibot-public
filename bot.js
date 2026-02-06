@@ -375,18 +375,23 @@ async function initializeWhatsAppClient(store) {
     });
 
     // Handle incoming messages
-    client.on('message', handleMessage);
+    client.on('message', (message) => {
+        console.log(`⚡ Message event triggered at ${new Date().toISOString()}`);
+        handleMessage(message);
+    });
 
     return client;
 }
 
 // Message handler (moved from inline)
 async function handleMessage(message) {
+    const startTime = Date.now();
     try {
+        console.log(`\n⏱️  Handler started at ${new Date().toISOString()}`);
         const chat = await message.getChat();
         const contact = await message.getContact();
 
-        console.log(`\n📩 Message from ${contact.pushname || contact.number}: ${message.body}`);
+        console.log(`📩 Message from ${contact.pushname || contact.number}: ${message.body} (received in ${Date.now() - startTime}ms)`);
         console.log(`📋 Message type: ${message.type}, hasMedia: ${message.hasMedia}`);
 
         // Check admin status (used for multiple features)
