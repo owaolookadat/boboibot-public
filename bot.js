@@ -10,6 +10,7 @@ const mongoose = require('mongoose');
 const { MongoStore } = require('wwebjs-mongo');
 const { processCsvFile } = require('./csvProcessor');
 const { processOutstandingCSV } = require('./outstandingProcessor');
+const { updatePaymentStatus, parsePaymentCommand } = require('./paymentCommandHandler');
 require('dotenv').config();
 
 // Admin Configuration
@@ -428,6 +429,46 @@ async function handleMessage(message) {
                 }
             } else {
                 console.log('⚠️ File received from non-admin, ignoring');
+            }
+        }
+
+        // Handle payment commands (Admin only)
+        const senderId = message.from;
+        const isAdmin = senderId === ADMIN_NUMBER;
+
+        if (isAdmin) {
+            const paymentCommand = parsePaymentCommand(message.body);
+
+            if (paymentCommand) {
+                console.log(`💳 Payment command detected: ${paymentCommand.invoiceNo} → ${paymentCommand.status}`);
+
+                // If no date provided and status is "Paid", use today's date
+                if (paymentCommand.status === 'Paid' && !paymentCommand.paymentDate) {
+                    const today = new Date();
+                    paymentCommand.paymentDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+                }
+
+                const result = await updatePaymentStatus(
+                    paymentCommand.invoiceNo,
+                    paymentCommand.status,
+                    paymentCommand.paymentDate,
+                    sheetsAPI,
+                    SHEET_ID
+                );
+
+                if (result.success) {
+                    await message.reply(
+                        `✅ ${result.message}\n\n` +
+                        `📋 **Invoice:** ${result.invoiceNo}\n` +
+                        `💰 **Status:** ${result.status}\n` +
+                        (result.paymentDate ? `📅 **Date:** ${result.paymentDate}\n` : '') +
+                        `📊 **Line items updated:** ${result.rowsUpdated}`
+                    );
+                } else {
+                    await message.reply(`❌ ${result.message}`);
+                }
+
+                return; // Don't process further
             }
         }
 
