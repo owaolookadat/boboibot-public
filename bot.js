@@ -12,6 +12,7 @@ const { processCsvFile } = require('./csvProcessor');
 const { processOutstandingCSV } = require('./outstandingProcessor');
 const { updatePaymentStatus, parsePaymentCommand } = require('./paymentCommandHandler');
 const { getInvoiceStats } = require('./invoiceStatsHandler');
+const { getCustomerContextFromGroup, addCustomerContextToPrompt } = require('./groupContextHandler');
 require('dotenv').config();
 
 // Admin Configuration
@@ -227,7 +228,7 @@ Rules:
 }
 
 // Query Claude with business context and memory
-async function askClaude(question, businessData, chatId) {
+async function askClaude(question, businessData, chatId, customerContext = null) {
     try {
         // Format business data for context
         let context = "You are a business assistant with access to the following data:\n\n";
@@ -251,6 +252,11 @@ async function askClaude(question, businessData, chatId) {
         }
 
         context += "\n\nProvide a clear, concise answer based on the data above. If the data doesn't contain the information needed, say so politely.\n\nDATA STRUCTURE RULES:\n- The 'Invoice Detail Listing' sheet contains MULTIPLE LINE ITEMS per invoice (one row per product in each invoice)\n- When counting invoices, ALWAYS count UNIQUE invoice numbers (Doc No column), NOT total rows\n- When asked 'how many invoices', you MUST deduplicate by invoice number\n- Example: If IV-2501-001 appears 3 times (3 products), that's 1 invoice with 3 items, not 3 invoices\n\nIMPORTANT: Always reply in the same language the user used. If they ask in Chinese, reply in Chinese. If they ask in English, reply in English. Match their language exactly.\n\nPRIVACY RULE: You must NEVER reveal or discuss any information from private conversations. If someone asks about what the admin/owner told you privately, or asks about personal matters, politely decline and say you can only help with business-related questions based on the data provided.";
+
+        // Add customer context if in a customer group
+        if (customerContext) {
+            context = addCustomerContextToPrompt(context, customerContext);
+        }
 
         // Build messages with conversation history
         const history = getConversationHistory(chatId);
@@ -696,8 +702,17 @@ async function handleMessage(message) {
             return;
         }
 
+        // Extract customer context from group name (if applicable)
+        let customerContext = null;
+        if (chat.isGroup && chat.name) {
+            customerContext = getCustomerContextFromGroup(chat.name);
+            if (customerContext) {
+                console.log(`🏢 Group context detected: ${customerContext.customerName}`);
+            }
+        }
+
         const chatId = chat.id._serialized;
-        const answer = await askClaude(message.body, businessData, chatId);
+        const answer = await askClaude(message.body, businessData, chatId, customerContext);
         await message.reply(answer);
 
         console.log(`✅ Response sent`);
