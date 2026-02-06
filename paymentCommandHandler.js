@@ -75,27 +75,34 @@ async function updatePaymentStatus(invoiceNo, status, paymentDate, sheetsAPI, sh
     }
 }
 
-// Parse payment command from message
+// Parse payment command from message (supports multiple invoices)
 function parsePaymentCommand(message) {
     const text = message.trim();
 
     // Patterns to match:
     // "mark paid IV-2506-005"
+    // "IV2511007 Iv2511031 Iv2512026 Mark paid on 21/12/2025"
     // "mark unpaid IV-2506-005"
     // "/payment paid IV-2506-005"
-    // "/payment unpaid IV-2506-005"
     // "IV-2506-005 paid"
-    // "paid IV-2506-005"
 
     const lowerText = text.toLowerCase();
 
-    // Extract invoice number (starts with IV-)
-    const invoiceMatch = text.match(/IV-\d{4}-\d{3}/i);
-    if (!invoiceMatch) {
-        return null; // No invoice number found
-    }
+    // Extract ALL invoice numbers (starts with IV-)
+    const invoiceMatches = text.matchAll(/IV-?\d{4}-?\d{3}/gi);
+    const invoiceNumbers = Array.from(invoiceMatches, match => {
+        // Normalize format: add dash if missing (IV2511007 -> IV-2511-007)
+        let inv = match[0].toUpperCase().replace(/^IV-?/, 'IV-');
+        if (!inv.includes('-', 3)) {
+            // No dashes, add them: IV2511007 -> IV-2511-007
+            inv = inv.replace(/^IV-?(\d{4})(\d{3})$/, 'IV-$1-$2');
+        }
+        return inv;
+    });
 
-    const invoiceNo = invoiceMatch[0].toUpperCase();
+    if (invoiceNumbers.length === 0) {
+        return null; // No invoice numbers found
+    }
 
     // Determine status
     let status = null;
@@ -114,7 +121,7 @@ function parsePaymentCommand(message) {
     const paymentDate = dateMatch ? dateMatch[1] : '';
 
     return {
-        invoiceNo,
+        invoiceNumbers,  // Changed from invoiceNo to invoiceNumbers (array)
         status,
         paymentDate
     };

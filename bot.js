@@ -439,7 +439,7 @@ async function handleMessage(message) {
             const paymentCommand = parsePaymentCommand(message.body);
 
             if (paymentCommand) {
-                console.log(`💳 Payment command detected: ${paymentCommand.invoiceNo} → ${paymentCommand.status}`);
+                console.log(`💳 Payment command detected: ${paymentCommand.invoiceNumbers.length} invoice(s) → ${paymentCommand.status}`);
 
                 // If no date provided and status is "Paid", use today's date
                 if (paymentCommand.status === 'Paid' && !paymentCommand.paymentDate) {
@@ -447,24 +447,51 @@ async function handleMessage(message) {
                     paymentCommand.paymentDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
                 }
 
-                const result = await updatePaymentStatus(
-                    paymentCommand.invoiceNo,
-                    paymentCommand.status,
-                    paymentCommand.paymentDate,
-                    sheetsAPI,
-                    SHEET_ID
-                );
-
-                if (result.success) {
-                    await message.reply(
-                        `✅ ${result.message}\n\n` +
-                        `📋 **Invoice:** ${result.invoiceNo}\n` +
-                        `💰 **Status:** ${result.status}\n` +
-                        (result.paymentDate ? `📅 **Date:** ${result.paymentDate}\n` : '') +
-                        `📊 **Line items updated:** ${result.rowsUpdated}`
+                // Process each invoice
+                const results = [];
+                for (const invoiceNo of paymentCommand.invoiceNumbers) {
+                    const result = await updatePaymentStatus(
+                        invoiceNo,
+                        paymentCommand.status,
+                        paymentCommand.paymentDate,
+                        sheetsAPI,
+                        SHEET_ID
                     );
+                    results.push(result);
+                }
+
+                // Send summary response
+                const successCount = results.filter(r => r.success).length;
+                const failCount = results.filter(r => !r.success).length;
+                const totalRowsUpdated = results.reduce((sum, r) => sum + (r.rowsUpdated || 0), 0);
+
+                if (successCount > 0) {
+                    let response = `✅ Payment status updated!\n\n`;
+                    response += `💰 **Status:** ${paymentCommand.status}\n`;
+                    if (paymentCommand.paymentDate) {
+                        response += `📅 **Date:** ${paymentCommand.paymentDate}\n`;
+                    }
+                    response += `\n📊 **Summary:**\n`;
+                    response += `• Invoices processed: ${results.length}\n`;
+                    response += `• Successful: ${successCount}\n`;
+                    if (failCount > 0) {
+                        response += `• Failed: ${failCount}\n`;
+                    }
+                    response += `• Total line items updated: ${totalRowsUpdated}\n`;
+
+                    // List each invoice
+                    response += `\n📋 **Invoices:**\n`;
+                    results.forEach(r => {
+                        if (r.success) {
+                            response += `✅ ${r.invoiceNo} (${r.rowsUpdated} items)\n`;
+                        } else {
+                            response += `❌ ${r.invoiceNo} - ${r.message}\n`;
+                        }
+                    });
+
+                    await message.reply(response);
                 } else {
-                    await message.reply(`❌ ${result.message}`);
+                    await message.reply(`❌ Failed to update invoices. Check invoice numbers and try again.`);
                 }
 
                 return; // Don't process further
