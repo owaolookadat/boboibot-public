@@ -13,8 +13,9 @@ const { processOutstandingCSV } = require('./outstandingProcessor');
 const { updatePaymentStatus, parsePaymentCommand } = require('./paymentCommandHandler');
 const { getInvoiceStats } = require('./invoiceStatsHandler');
 const { getCustomerContextFromGroup, addCustomerContextToPrompt } = require('./groupContextHandler');
-const { smartFilter } = require('./smartDataFilter');
+const { smartFilter, extractCustomerKeywords } = require('./smartDataFilter');
 const { initRedis, getCached, setCached, invalidateCache, clearAllCache, getCacheStats } = require('./cacheManager');
+const { checkPaymentStatus, formatPaymentStatus, isPaymentQuery, detectLanguage } = require('./paymentChecker');
 require('dotenv').config();
 
 // Admin Configuration
@@ -287,7 +288,7 @@ async function askClaude(question, businessData, chatId, customerContext = null)
             context += '\n';
         }
 
-        context += "\n\nBE CONCISE BUT CONTEXTUAL. Give complete answers with necessary context, but eliminate all fluff and filler.\n\nRESPONSE STYLE RULES:\n- Answer directly with just enough context to be clear\n- For 'does X owe money': USE THE PAYMENT SUMMARY provided above - it's pre-calculated and accurate\n- For payment queries: Trust the summary numbers, they're computed from the actual data\n- For data queries: Provide the answer with brief context (e.g., '3 unpaid invoices, total RM5,000')\n- Avoid phrases like 'Based on the data...', 'I can see that...', 'Let me check...'\n- Skip introductions and conclusions - just give the answer\n- Only elaborate when user asks 'why', 'explain', or 'how'\n\nDATA STRUCTURE RULES:\n- The 'Invoice Detail Listing' sheet contains MULTIPLE LINE ITEMS per invoice (one row per product in each invoice)\n- When counting invoices, ALWAYS count UNIQUE invoice numbers (Doc No column), NOT total rows\n- When asked 'how many invoices', you MUST deduplicate by invoice number\n- Example: If IV-2501-001 appears 3 times (3 products), that's 1 invoice with 3 items, not 3 invoices\n\nIMPORTANT: Always reply in the same language the user used. If they ask in Chinese, reply in Chinese. If they ask in English, reply in English. Match their language exactly.\n\nPRIVACY RULE: You must NEVER reveal or discuss any information from private conversations. If someone asks about what the admin/owner told you privately, or asks about personal matters, politely decline and say you can only help with business-related questions based on the data provided.";
+        context += "\n\nBE CONCISE BUT CONTEXTUAL. Give complete answers with necessary context, but eliminate all fluff and filler.\n\nRESPONSE STYLE RULES:\n- Answer directly with just enough context to be clear\n- For 'does X owe money': USE THE PAYMENT SUMMARY provided above - it's pre-calculated and accurate\n- For payment queries: Trust the summary numbers, they're computed from the actual data\n- For data queries: Provide the answer with brief context (e.g., '3 unpaid invoices, total RM5,000')\n- Avoid phrases like 'Based on the data...', 'I can see that...', 'Let me check...'\n- Skip introductions and conclusions - just give the answer\n- Only elaborate when user asks 'why', 'explain', or 'how'\n\nFORMATTING RULES:\n- Add blank lines between sections for readability\n- When listing multiple items, add a blank line between each item\n- Use spacing to make responses easier to read on mobile\n- Example: Item 1\\n\\nItem 2\\n\\nItem 3 (not Item 1\\nItem 2\\nItem 3)\n\nDATA STRUCTURE RULES:\n- The 'Invoice Detail Listing' sheet contains MULTIPLE LINE ITEMS per invoice (one row per product in each invoice)\n- When counting invoices, ALWAYS count UNIQUE invoice numbers (Doc No column), NOT total rows\n- When asked 'how many invoices', you MUST deduplicate by invoice number\n- Example: If IV-2501-001 appears 3 times (3 products), that's 1 invoice with 3 items, not 3 invoices\n\nIMPORTANT: Always reply in the same language the user used. If they ask in Chinese, reply in Chinese. If they ask in English, reply in English. Match their language exactly.\n\nPRIVACY RULE: You must NEVER reveal or discuss any information from private conversations. If someone asks about what the admin/owner told you privately, or asks about personal matters, politely decline and say you can only help with business-related questions based on the data provided.";
 
         // Add customer context if in a customer group
         if (customerContext) {
@@ -784,6 +785,34 @@ async function handleMessage(message) {
             }
         }
 
+        // CHECK: Is this a payment query? Handle with CODE instead of AI
+        if (isPaymentQuery(message.body)) {
+            console.log('💰 Payment query detected - using code-based checker');
+
+            // Extract customer name from question
+            let customerKeywords = extractCustomerKeywords(message.body);
+            if (customerContext) {
+                customerKeywords.push(customerContext.customerName);
+            }
+
+            if (customerKeywords.length > 0) {
+                // Find invoice data
+                const invoiceSheet = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (invoiceSheet) {
+                    const customerName = customerKeywords[0]; // Use first detected customer
+                    const paymentStatus = checkPaymentStatus(invoiceSheet, customerName);
+                    const language = detectLanguage(message.body);
+                    const response = formatPaymentStatus(paymentStatus, customerName, language);
+
+                    await message.reply(response);
+                    console.log(`✅ Payment status sent (code-based, no AI)`);
+                    return;
+                }
+            }
+        }
+
+        // For non-payment queries or if payment checker failed, use AI
         const chatId = chat.id._serialized;
         const answer = await askClaude(message.body, businessData, chatId, customerContext);
         await message.reply(answer);
