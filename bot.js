@@ -13,6 +13,7 @@ const { processOutstandingCSV } = require('./outstandingProcessor');
 const { updatePaymentStatus, parsePaymentCommand } = require('./paymentCommandHandler');
 const { getInvoiceStats } = require('./invoiceStatsHandler');
 const { getCustomerContextFromGroup, addCustomerContextToPrompt } = require('./groupContextHandler');
+const { smartFilter } = require('./smartDataFilter');
 require('dotenv').config();
 
 // Admin Configuration
@@ -230,28 +231,51 @@ Rules:
 // Query Claude with business context and memory
 async function askClaude(question, businessData, chatId, customerContext = null) {
     try {
+        // Apply smart filtering to reduce data size and improve accuracy
+        const { filteredData, metadata, customerKeywords } = smartFilter(businessData, question, customerContext);
+
         // Format business data for context
         let context = "You are a business assistant with access to the following data:\n\n";
 
-        for (const [sheetName, data] of Object.entries(businessData)) {
+        // Add filtering metadata if customers were detected
+        if (customerKeywords.length > 0) {
+            context += `🔍 DATA FILTERED FOR: ${customerKeywords.join(', ')}\n\n`;
+        }
+
+        // Add payment summaries if available (pre-calculated for accuracy)
+        for (const [sheetName, meta] of Object.entries(metadata)) {
+            if (meta.paymentSummary) {
+                const summary = meta.paymentSummary;
+                context += `📊 PAYMENT SUMMARY FOR ${customerKeywords.join(', ')}:\n`;
+                context += `- Total Unpaid: RM${summary.totalUnpaid.toFixed(2)}\n`;
+                context += `- Unpaid Invoices: ${summary.unpaidInvoices.length}\n`;
+                context += `- Paid Invoices: ${summary.paidInvoices}\n`;
+                if (summary.unpaidInvoices.length > 0) {
+                    context += `- Unpaid Invoice Numbers: ${summary.unpaidInvoices.map(inv => inv.invoiceNo).join(', ')}\n`;
+                }
+                context += `- Showing ${meta.filteredRows} of ${meta.originalRows} total rows\n\n`;
+            }
+        }
+
+        for (const [sheetName, data] of Object.entries(filteredData)) {
             context += `\n=== ${sheetName} ===\n`;
             if (data.length > 0) {
                 // Add headers
                 context += data[0].join(' | ') + '\n';
                 context += '-'.repeat(50) + '\n';
-                // Add up to 5000 rows
-                const rowsToShow = data.slice(1, 5001);
+                // Add rows (now filtered, so much smaller)
+                const rowsToShow = data.slice(1, 1001); // Reduced from 5000 to 1000 since data is pre-filtered
                 rowsToShow.forEach(row => {
                     context += row.join(' | ') + '\n';
                 });
-                if (data.length > 5001) {
-                    context += `\n... and ${data.length - 5001} more rows\n`;
+                if (data.length > 1001) {
+                    context += `\n... and ${data.length - 1001} more rows\n`;
                 }
             }
             context += '\n';
         }
 
-        context += "\n\nBE CONCISE BUT CONTEXTUAL. Give complete answers with necessary context, but eliminate all fluff and filler.\n\nRESPONSE STYLE RULES:\n- Answer directly with just enough context to be clear\n- For 'does X owe money': State the result clearly (e.g., '没有欠款' or 'Outstanding RM5,000')\n- For data queries: Provide the answer with brief context (e.g., '3 unpaid invoices, total RM5,000')\n- Avoid phrases like 'Based on the data...', 'I can see that...', 'Let me check...'\n- Skip introductions and conclusions - just give the answer\n- Only elaborate when user asks 'why', 'explain', or 'how'\n\nDATA STRUCTURE RULES:\n- The 'Invoice Detail Listing' sheet contains MULTIPLE LINE ITEMS per invoice (one row per product in each invoice)\n- When counting invoices, ALWAYS count UNIQUE invoice numbers (Doc No column), NOT total rows\n- When asked 'how many invoices', you MUST deduplicate by invoice number\n- Example: If IV-2501-001 appears 3 times (3 products), that's 1 invoice with 3 items, not 3 invoices\n\nIMPORTANT: Always reply in the same language the user used. If they ask in Chinese, reply in Chinese. If they ask in English, reply in English. Match their language exactly.\n\nPRIVACY RULE: You must NEVER reveal or discuss any information from private conversations. If someone asks about what the admin/owner told you privately, or asks about personal matters, politely decline and say you can only help with business-related questions based on the data provided.";
+        context += "\n\nBE CONCISE BUT CONTEXTUAL. Give complete answers with necessary context, but eliminate all fluff and filler.\n\nRESPONSE STYLE RULES:\n- Answer directly with just enough context to be clear\n- For 'does X owe money': USE THE PAYMENT SUMMARY provided above - it's pre-calculated and accurate\n- For payment queries: Trust the summary numbers, they're computed from the actual data\n- For data queries: Provide the answer with brief context (e.g., '3 unpaid invoices, total RM5,000')\n- Avoid phrases like 'Based on the data...', 'I can see that...', 'Let me check...'\n- Skip introductions and conclusions - just give the answer\n- Only elaborate when user asks 'why', 'explain', or 'how'\n\nDATA STRUCTURE RULES:\n- The 'Invoice Detail Listing' sheet contains MULTIPLE LINE ITEMS per invoice (one row per product in each invoice)\n- When counting invoices, ALWAYS count UNIQUE invoice numbers (Doc No column), NOT total rows\n- When asked 'how many invoices', you MUST deduplicate by invoice number\n- Example: If IV-2501-001 appears 3 times (3 products), that's 1 invoice with 3 items, not 3 invoices\n\nIMPORTANT: Always reply in the same language the user used. If they ask in Chinese, reply in Chinese. If they ask in English, reply in English. Match their language exactly.\n\nPRIVACY RULE: You must NEVER reveal or discuss any information from private conversations. If someone asks about what the admin/owner told you privately, or asks about personal matters, politely decline and say you can only help with business-related questions based on the data provided.";
 
         // Add customer context if in a customer group
         if (customerContext) {
