@@ -346,12 +346,14 @@ async function handleMessage(message) {
         console.log(`\n📩 Message from ${contact.pushname || contact.number}: ${message.body}`);
         console.log(`📋 Message type: ${message.type}, hasMedia: ${message.hasMedia}`);
 
+        // Check admin status (used for multiple features)
+        const senderId = message.from;
+        const isAdmin = senderId === ADMIN_NUMBER;
+
         // Handle file uploads (CSV processing) - Admin only
         // Check for both media and document types (CSV files are often type "document")
         if (message.hasMedia || message.type === 'document') {
             console.log('🔍 File detected, checking admin status...');
-            const senderId = message.from;
-            const isAdmin = senderId === ADMIN_NUMBER;
             console.log(`👤 Sender: ${senderId}, isAdmin: ${isAdmin}, ADMIN_NUMBER: ${ADMIN_NUMBER}`);
 
             if (isAdmin) {
@@ -433,9 +435,6 @@ async function handleMessage(message) {
         }
 
         // Handle payment commands (Admin only)
-        const senderId = message.from;
-        const isAdmin = senderId === ADMIN_NUMBER;
-
         if (isAdmin) {
             const paymentCommand = parsePaymentCommand(message.body);
 
@@ -516,8 +515,7 @@ async function handleMessage(message) {
             return;
         }
 
-        const senderId = message.from;
-        const isAdmin = senderId === ADMIN_NUMBER;
+        // senderId and isAdmin already declared at top of function
 
         if (!botSettings.enabled && !isAdmin) {
             return;
