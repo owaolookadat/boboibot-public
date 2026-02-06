@@ -16,6 +16,7 @@ const { getCustomerContextFromGroup, addCustomerContextToPrompt } = require('./g
 const { smartFilter, extractCustomerKeywords } = require('./smartDataFilter');
 const { initRedis, getCached, setCached, invalidateCache, clearAllCache, getCacheStats } = require('./cacheManager');
 const { checkPaymentStatus, formatPaymentStatus, isPaymentQuery, detectLanguage } = require('./paymentChecker');
+const { classifyIntent, routeQuery } = require('./intentRouter');
 require('dotenv').config();
 
 // Admin Configuration
@@ -798,39 +799,32 @@ async function handleMessage(message) {
             }
         }
 
-        // CHECK: Is this a payment query? Handle with CODE instead of AI
-        if (isPaymentQuery(message.body)) {
-            console.log('💰 Payment query detected - using code-based checker');
+        // AI-POWERED INTENT ROUTING
+        // Use AI to classify intent, then route to appropriate function or fallback to AI
+        console.log('🤖 Classifying intent with AI...');
+        const intent = await classifyIntent(message.body, businessData);
 
-            // Extract customer name from question
-            let customerKeywords = extractCustomerKeywords(message.body);
-            if (customerContext) {
-                customerKeywords.push(customerContext.customerName);
-            }
+        // Try to route to specific function handler
+        const routeResult = await routeQuery(intent, message.body, businessData, {
+            checkPaymentStatus,
+            formatPaymentStatus,
+            getInvoiceStats
+        });
 
-            if (customerKeywords.length > 0) {
-                // Find invoice data
-                const invoiceSheet = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
-
-                if (invoiceSheet) {
-                    const customerName = customerKeywords[0]; // Use first detected customer
-                    const paymentStatus = checkPaymentStatus(invoiceSheet, customerName);
-                    const language = detectLanguage(message.body);
-                    const response = formatPaymentStatus(paymentStatus, customerName, language);
-
-                    await message.reply(response);
-                    console.log(`✅ Payment status sent (code-based, no AI)`);
-                    return;
-                }
-            }
+        if (routeResult.handled) {
+            // Function handled it, send response
+            await message.reply(routeResult.response);
+            console.log(`✅ Response sent (${routeResult.intent}, code-based)`);
+            return;
         }
 
-        // For non-payment queries or if payment checker failed, use AI
+        // Fallback to AI with smart filtering
+        console.log('🧠 Using AI for response (with smart filtering)');
         const chatId = chat.id._serialized;
         const answer = await askClaude(message.body, businessData, chatId, customerContext);
         await message.reply(answer);
 
-        console.log(`✅ Response sent`);
+        console.log(`✅ Response sent (AI)`);
 
     } catch (error) {
         console.error('Error handling message:', error);
