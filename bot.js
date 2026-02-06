@@ -14,6 +14,7 @@ const { updatePaymentStatus, parsePaymentCommand } = require('./paymentCommandHa
 const { getInvoiceStats } = require('./invoiceStatsHandler');
 const { getCustomerContextFromGroup, addCustomerContextToPrompt } = require('./groupContextHandler');
 const { smartFilter } = require('./smartDataFilter');
+const { initRedis, getCached, setCached, invalidateCache, clearAllCache, getCacheStats } = require('./cacheManager');
 require('dotenv').config();
 
 // Admin Configuration
@@ -134,9 +135,17 @@ async function getAllSheets() {
     }
 }
 
-// Format sheet data for Claude
+// Format sheet data for Claude (with caching)
 async function getAllBusinessData() {
     try {
+        // Try to get from cache first
+        const cached = await getCached('all_business_data');
+        if (cached) {
+            return cached;
+        }
+
+        // Cache miss - fetch from Google Sheets
+        console.log('📥 Fetching fresh data from Google Sheets...');
         const sheets = await getAllSheets();
         let allData = {};
 
@@ -144,6 +153,9 @@ async function getAllBusinessData() {
             const data = await getSheetData(sheetName);
             allData[sheetName] = data;
         }
+
+        // Store in cache
+        await setCached('all_business_data', allData);
 
         return allData;
     } catch (error) {
@@ -427,6 +439,10 @@ async function handleMessage(message) {
 
                         // Send result
                         if (result.success) {
+                            // Invalidate cache after successful CSV upload
+                            await clearAllCache();
+                            console.log('🗑️  Cache cleared after CSV upload');
+
                             if (result.updatedRows !== undefined) {
                                 // Outstanding CSV result
                                 await message.reply(
@@ -623,7 +639,10 @@ async function handleMessage(message) {
                     '/admin off - Disable bot\n' +
                     '/admin clearmemory - Clear all conversation history\n' +
                     '/admin groups on - Enable group responses\n' +
-                    '/admin groups off - Disable group responses'
+                    '/admin groups off - Disable group responses\n' +
+                    '/admin cache stats - Show cache statistics\n' +
+                    '/admin cache refresh - Refresh cached data\n' +
+                    '/admin cache clear - Clear all cached data'
                 );
                 return;
             }
@@ -668,6 +687,31 @@ async function handleMessage(message) {
             if (cmd === 'groups off') {
                 botSettings.respondInGroups = false;
                 await message.reply('❌ Bot will no longer respond in groups');
+                return;
+            }
+
+            if (cmd === 'cache stats') {
+                const stats = await getCacheStats();
+                await message.reply(
+                    '📊 *Cache Statistics:*\n\n' +
+                    `• Backend: ${stats.backend}\n` +
+                    `• Cached entries: ${stats.entries}\n` +
+                    `• TTL: ${stats.ttl} seconds (${Math.floor(stats.ttl/60)} minutes)\n` +
+                    `• Status: ${stats.enabled ? '✅ Enabled' : '❌ Disabled'}`
+                );
+                return;
+            }
+
+            if (cmd === 'cache refresh') {
+                await clearAllCache();
+                await message.reply('🔄 Cache cleared. Next query will fetch fresh data from Google Sheets.');
+                return;
+            }
+
+            if (cmd === 'cache clear') {
+                await clearAllCache();
+                conversationHistory.clear();
+                await message.reply('🗑️  All cache and conversation history cleared');
                 return;
             }
 
@@ -789,6 +833,10 @@ async function startBot() {
     if (!sheetsInitialized) {
         console.log('\n⚠️  Continuing without Google Sheets - bot will have limited functionality');
     }
+
+    // Initialize Redis cache
+    console.log('🔧 Initializing cache system...');
+    await initRedis();
 
     // Initialize WhatsApp
     client.initialize();
