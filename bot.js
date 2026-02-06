@@ -11,6 +11,7 @@ const { MongoStore } = require('wwebjs-mongo');
 const { processCsvFile } = require('./csvProcessor');
 const { processOutstandingCSV } = require('./outstandingProcessor');
 const { updatePaymentStatus, parsePaymentCommand } = require('./paymentCommandHandler');
+const { getInvoiceStats } = require('./invoiceStatsHandler');
 require('dotenv').config();
 
 // Admin Configuration
@@ -549,6 +550,35 @@ async function handleMessage(message) {
         }
 
         chat.sendStateTyping();
+
+        // Check for invoice stats queries (triggers automatic accurate counting)
+        const lowerBody = message.body.toLowerCase();
+        const isInvoiceStatsQuery = (
+            (lowerBody.includes('how many') || lowerBody.includes('count')) &&
+            (lowerBody.includes('invoice') || lowerBody.includes('unpaid') || lowerBody.includes('paid'))
+        );
+
+        if (isInvoiceStatsQuery) {
+            console.log('📊 Invoice stats query detected, fetching accurate stats...');
+            const stats = await getInvoiceStats(sheetsAPI, SHEET_ID);
+
+            if (stats.success) {
+                let response = '📊 *Invoice Statistics*\n\n';
+                response += `📋 Total Invoices: ${stats.totalInvoices}\n`;
+                response += `✅ Paid: ${stats.paidCount} (RM ${stats.paidAmount.toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2})})\n`;
+                response += `⏳ Unpaid: ${stats.unpaidCount} (RM ${stats.unpaidAmount.toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2})})\n`;
+
+                if (lowerBody.includes('unpaid') && stats.unpaidCount > 0 && stats.unpaidCount <= 10) {
+                    response += `\n*Unpaid Invoices:*\n`;
+                    stats.unpaidInvoices.forEach(inv => {
+                        response += `• ${inv.invoiceNo}: RM ${inv.total.toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${inv.lineItems} items)\n`;
+                    });
+                }
+
+                await message.reply(response);
+                return; // Don't process with AI
+            }
+        }
 
         // Admin commands
         if (isAdmin && message.body.toLowerCase().startsWith('/admin')) {
