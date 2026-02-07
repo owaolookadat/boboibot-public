@@ -3,6 +3,9 @@
 
 const chrono = require('chrono-node');
 
+// Configure timezone for Malaysia (UTC+8)
+const MALAYSIA_TIMEZONE_OFFSET = 8 * 60; // 8 hours in minutes
+
 /**
  * Parse natural language into structured reminder data
  * @param {string} input - User's message (e.g., "Remind me to call John at 3pm tomorrow")
@@ -12,8 +15,11 @@ function parseReminder(input) {
     // Extract the task (what to remind about)
     const task = extractTask(input);
 
-    // Parse date and time using chrono
-    const parsedDate = chrono.parse(input, new Date(), { forwardDate: true });
+    // Get current time in Malaysia timezone
+    const nowMalaysia = new Date();
+
+    // Parse date and time using chrono with reference to Malaysia time
+    const parsedDate = chrono.parse(input, nowMalaysia, { forwardDate: true });
 
     if (parsedDate.length === 0) {
         return {
@@ -26,7 +32,29 @@ function parseReminder(input) {
     }
 
     const result = parsedDate[0];
-    const datetime = result.start.date();
+    let datetime = result.start.date();
+
+    // Chrono parses in local machine time, but we need to ensure it's interpreted as Malaysia time
+    // Since the server is running in UTC, we need to adjust
+    // Get the parsed components
+    const hour = result.start.get('hour');
+    const minute = result.start.get('minute') || 0;
+    const day = result.start.get('day');
+    const month = result.start.get('month');
+    const year = result.start.get('year');
+
+    // If we have time components, reconstruct the date in Malaysia timezone
+    if (hour !== null) {
+        // Create date with Malaysia timezone offset
+        datetime = new Date(Date.UTC(
+            year,
+            month - 1,
+            day,
+            hour - 8, // Subtract 8 hours to convert from Malaysia to UTC
+            minute,
+            0
+        ));
+    }
 
     // Detect recurring patterns
     const repeat = detectRecurring(input);
@@ -130,7 +158,7 @@ function calculateConfidence(chronoResult, input) {
 }
 
 /**
- * Format datetime for display
+ * Format datetime for display (in Malaysia timezone)
  */
 function formatDateTime(datetime) {
     if (!datetime) return null;
@@ -139,17 +167,20 @@ function formatDateTime(datetime) {
     const diff = datetime - now;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
+    // Format in Malaysia timezone (Asia/Kuala_Lumpur)
     const timeStr = datetime.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true
+        hour12: true,
+        timeZone: 'Asia/Kuala_Lumpur'
     });
 
     const dateStr = datetime.toLocaleDateString('en-US', {
         weekday: 'short',
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'Asia/Kuala_Lumpur'
     });
 
     // Relative descriptions
