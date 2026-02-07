@@ -236,9 +236,9 @@ function searchInvoicesByProduct(invoiceData, productName) {
     console.log('📋 Available columns:', headers.slice(0, 10).join(', '));
 
     const productIndex = headers.findIndex(h => h && (
-        h.toLowerCase().includes('item') ||
-        h.toLowerCase().includes('product') ||
-        h.toLowerCase().includes('description')
+        h.toLowerCase().includes('description') ||
+        (h.toLowerCase().includes('item') && !h.toLowerCase().includes('code')) ||
+        h.toLowerCase().includes('product')
     ));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
     const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
