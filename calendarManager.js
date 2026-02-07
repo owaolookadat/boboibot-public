@@ -17,18 +17,14 @@ class CalendarManager {
      */
     async initialize() {
         try {
-            // Check if credentials exist
-            const credentialsPath = path.join(__dirname, 'google-credentials.json');
-            const tokenPath = path.join(__dirname, 'google-token.json');
+            // Use SAME credentials as Google Sheets
+            const credentialsPath = path.join(__dirname, 'oauth_credentials.json');
+            const tokenPath = path.join(__dirname, 'token.json');
 
             const credentialsExist = await this.fileExists(credentialsPath);
             if (!credentialsExist) {
-                console.log('⚠️  Google Calendar credentials not found');
-                console.log('📝 Please set up Google Calendar API:');
-                console.log('   1. Go to: https://console.cloud.google.com/');
-                console.log('   2. Enable Google Calendar API');
-                console.log('   3. Create OAuth 2.0 credentials');
-                console.log('   4. Save as google-credentials.json');
+                console.log('⚠️  Google credentials not found');
+                console.log('📝 Need oauth_credentials.json (same as Sheets)');
                 return false;
             }
 
@@ -44,8 +40,9 @@ class CalendarManager {
                 const token = JSON.parse(await fs.readFile(tokenPath, 'utf8'));
                 oAuth2Client.setCredentials(token);
             } else {
-                console.log('⚠️  Google Calendar not authorized yet');
-                console.log('📝 Run: node setup-calendar.js to authorize');
+                console.log('⚠️  Google token not found');
+                console.log('📝 Calendar will work once you re-authorize with Calendar scope');
+                console.log('   Just delete token.json and restart bot to re-authorize');
                 return false;
             }
 

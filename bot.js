@@ -64,7 +64,10 @@ const personalHistory = [];
 const MAX_PERSONAL_HISTORY = 20;
 
 // OAuth2 Configuration
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets']; // Changed to allow read AND write
+const SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/calendar'
+]; // Sheets + Calendar access
 const TOKEN_PATH = path.join(__dirname, 'token.json');
 const CREDENTIALS_PATH = path.join(__dirname, 'oauth_credentials.json');
 
