@@ -818,7 +818,30 @@ async function handleMessage(message) {
             }
         }
 
-        // Use AI for all responses (intent routing disabled for consistent formatting)
+        // AI-POWERED INTENT ROUTING
+        // Use Haiku to classify intent, then route to code function or fallback to Sonnet
+        console.log('🤖 Classifying intent with AI...');
+        const intent = await classifyIntent(message.body, businessData);
+
+        // Try to route to specific function handler
+        const routeResult = await routeQuery(intent, message.body, businessData, {
+            checkPaymentStatus,
+            formatPaymentStatus,
+            getInvoiceStats,
+            getInvoiceDetails,
+            formatInvoiceDetails,
+            getCustomerInvoices,
+            formatCustomerInvoices
+        });
+
+        if (routeResult.handled) {
+            // Function handled it, send response
+            await message.reply(routeResult.response);
+            console.log(`✅ Response sent (${routeResult.intent}, code-based)`);
+            return;
+        }
+
+        // Fallback to AI with smart filtering
         console.log('🧠 Using AI for response (with smart filtering)');
         const chatId = chat.id._serialized;
         const answer = await askClaude(message.body, businessData, chatId, customerContext);
