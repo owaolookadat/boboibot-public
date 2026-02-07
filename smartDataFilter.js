@@ -48,11 +48,12 @@ function filterByCustomer(invoiceData, customerKeywords) {
     if (!customerKeywords || customerKeywords.length === 0) return invoiceData;
 
     const headers = invoiceData[0];
+    // Match actual sheet columns: "Debtor" and "Debtor Code" - consistent with paymentChecker.js
     const customerNameIndex = headers.findIndex(h =>
-        h && (h.toLowerCase().includes('customer') || h.toLowerCase() === 'name')
+        h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code')
     );
     const customerCodeIndex = headers.findIndex(h =>
-        h && h.toLowerCase().includes('code')
+        h && h.toLowerCase().includes('debtor') && h.toLowerCase().includes('code')
     );
 
     if (customerNameIndex === -1 && customerCodeIndex === -1) {

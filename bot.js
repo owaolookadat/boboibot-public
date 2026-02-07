@@ -15,7 +15,7 @@ const { getInvoiceStats } = require('./invoiceStatsHandler');
 const { getCustomerContextFromGroup, addCustomerContextToPrompt } = require('./groupContextHandler');
 const { smartFilter, extractCustomerKeywords } = require('./smartDataFilter');
 const { initRedis, getCached, setCached, invalidateCache, clearAllCache, getCacheStats } = require('./cacheManager');
-const { checkPaymentStatus, formatPaymentStatus, isPaymentQuery, detectLanguage } = require('./paymentChecker');
+const { checkPaymentStatus, formatPaymentStatus } = require('./paymentChecker');
 const { classifyIntent, routeQuery } = require('./intentRouter');
 const { getInvoiceDetails, formatInvoiceDetails, getCustomerInvoices, formatCustomerInvoices } = require('./invoiceDetailsHandler');
 require('dotenv').config();

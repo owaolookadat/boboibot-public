@@ -61,8 +61,9 @@ function getInvoiceDetails(invoiceData, invoiceNo) {
 
     const headers = invoiceData[0];
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
-    const customerNameIndex = headers.findIndex(h => h && h.toLowerCase().includes('customer'));
-    const customerCodeIndex = headers.findIndex(h => h && h.toLowerCase().includes('code'));
+    // Match actual sheet column: "Debtor" (not "Customer") - consistent with paymentChecker.js
+    const customerNameIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
+    const customerCodeIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && h.toLowerCase().includes('code'));
     const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date'));
     const itemDescIndex = headers.findIndex(h => h && h.toLowerCase().includes('description'));
     const qtyIndex = headers.findIndex(h => h && h.toLowerCase().includes('qty'));
@@ -179,11 +180,12 @@ function getCustomerInvoices(invoiceData, customerName, filters = {}) {
     }
 
     const headers = invoiceData[0];
-    const customerNameIndex = headers.findIndex(h => h && h.toLowerCase().includes('customer'));
+    // Match actual sheet columns - consistent with paymentChecker.js
+    const customerNameIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
-    const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date'));
-    const subTotalIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub total'));
-    const statusIndex = headers.findIndex(h => h && h.toLowerCase() === 'status');
+    const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
+    const subTotalIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
+    const statusIndex = headers.findIndex(h => h && h.toLowerCase().includes('payment') && h.toLowerCase().includes('status'));
 
     // Group invoices by invoice number
     const invoiceMap = new Map();
