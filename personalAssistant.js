@@ -31,8 +31,8 @@ function detectPersonalIntent(message, context = {}) {
         return { isPersonal: true, type: 'calendar_query' };
     }
 
-    // Delete reminder
-    if (/delete\s+(last\s+)?reminder|cancel\s+reminder|remove\s+reminder/i.test(message)) {
+    // Delete reminder (check before confirm/cancel to avoid conflicts)
+    if (/delete\s+(last\s+)?reminder|cancel\s+(last\s+)?reminder|remove\s+(last\s+)?reminder/i.test(message)) {
         return { isPersonal: true, type: 'delete_reminder' };
     }
 
