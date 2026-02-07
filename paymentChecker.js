@@ -100,35 +100,38 @@ function formatPaymentStatus(paymentStatus, customerName, language = 'zh') {
             `✅ ${customerName} has no outstanding\n\nAll ${paymentStatus.totalInvoices} invoices paid`;
     }
 
-    // Format unpaid invoices
-    let message = language === 'zh' ?
-        `⚠️ ${customerName} 有欠款\n\n` :
-        `⚠️ ${customerName} has outstanding\n\n`;
+    // Format unpaid invoices in DM-style format
+    const intro = language === 'zh' ?
+        `看看 ${customerName} 的未付款发票，我找到了这些欠款：\n\n*${customerName} - 未付款发票：*\n\n` :
+        `Looking at the unpaid invoices for ${customerName}, I found these outstanding amounts:\n\n*${customerName} - Unpaid Invoices:*\n\n`;
 
-    message += language === 'zh' ?
-        `*未付款发票 (${paymentStatus.unpaidInvoices.length}):*\n\n` :
-        `*Unpaid Invoices (${paymentStatus.unpaidInvoices.length}):*\n\n`;
+    let message = intro;
 
-    // List each unpaid invoice
-    for (const invoice of paymentStatus.unpaidInvoices) {
-        message += `• ${invoice.invoiceNo} (${invoice.date})\n`;
-        message += `  RM ${invoice.amount.toFixed(2)}\n`;
+    // List each unpaid invoice with detailed formatting
+    for (let i = 0; i < paymentStatus.unpaidInvoices.length; i++) {
+        const invoice = paymentStatus.unpaidInvoices[i];
+        const num = i + 1;
 
-        // Show first 2 items
+        message += `${num}. *${invoice.invoiceNo}* (${invoice.date}) - *RM ${invoice.amount.toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2})}*\n`;
+
+        // Show all items (not just first 2)
         if (invoice.items && invoice.items.length > 0) {
-            const itemsToShow = invoice.items.slice(0, 2);
-            message += `  ${itemsToShow.join(', ')}${invoice.items.length > 2 ? '...' : ''}\n`;
+            for (const item of invoice.items) {
+                message += `   - ${item}\n`;
+            }
         }
         message += '\n';
     }
 
-    message += language === 'zh' ?
-        `*总欠款: RM ${paymentStatus.totalUnpaid.toFixed(2)}*\n\n` :
-        `*Total Outstanding: RM ${paymentStatus.totalUnpaid.toFixed(2)}*\n\n`;
+    // Total with formatting
+    message += `*${language === 'zh' ? '总欠款' : 'Total Outstanding'}: RM ${paymentStatus.totalUnpaid.toLocaleString('en-MY', {minimumFractionDigits: 2, maximumFractionDigits: 2})}*\n\n`;
 
-    message += language === 'zh' ?
-        `已付清: ${paymentStatus.paidCount} 张发票` :
-        `Paid: ${paymentStatus.paidCount} invoices`;
+    // Footer
+    const footer = language === 'zh' ?
+        `所有发票都来自最近的订单。需要我标记任何发票为已付款吗？` :
+        `All invoices are from recent orders. Would you like me to mark any of these as paid or need more details?`;
+
+    message += footer;
 
     return message;
 }
