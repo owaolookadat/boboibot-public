@@ -365,34 +365,63 @@ async function initializeWhatsAppClient(store) {
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--no-zygote',
-                '--disable-gpu'
-            ]
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-extensions'
+            ],
+            // Increase timeouts for slower servers
+            timeout: 60000,
+            protocolTimeout: 180000 // 3 minutes for protocol operations
         },
-        authTimeoutMs: 120000 // Increase auth timeout to 2 minutes (default is 30s)
+        authTimeoutMs: 120000, // Increase auth timeout to 2 minutes (default is 30s)
+        qrMaxRetries: 5 // Limit QR code regeneration attempts
     });
 
     // WhatsApp Event Handlers
+    let qrCount = 0;
     client.on('qr', (qr) => {
-        console.log('\n📱 Scan this QR code with your WhatsApp:');
+        qrCount++;
+        console.log(`\n📱 QR Code #${qrCount} - Scan this with your WhatsApp:`);
         qrcode.generate(qr, { small: true });
         console.log('\nOpen WhatsApp on your phone > Settings > Linked Devices > Link a Device');
+        console.log(`⏱️  QR code will refresh in ~30 seconds if not scanned\n`);
+
+        if (qrCount > 3) {
+            console.log('⚠️  WARNING: QR code regenerated 3+ times. This may indicate:');
+            console.log('   - Phone not connected to internet');
+            console.log('   - WhatsApp not updated to latest version');
+            console.log('   - Previous session conflict (try closing other WhatsApp Web tabs)');
+            console.log('   - Firewall/antivirus blocking connection\n');
+        }
+    });
+
+    client.on('loading_screen', (percent, message) => {
+        console.log(`🔄 Loading: ${percent}% - ${message}`);
     });
 
     client.on('ready', () => {
         console.log('\n✅ WhatsApp Bot is ready!');
         console.log('📞 Your bot is now listening for messages...\n');
+        qrCount = 0; // Reset counter on success
     });
 
     client.on('authenticated', () => {
         console.log('✅ WhatsApp authenticated successfully');
+        console.log('💾 Saving session data...');
     });
 
     client.on('auth_failure', (msg) => {
         console.error('❌ Authentication failed:', msg);
+        console.log('\n🔧 Troubleshooting steps:');
+        console.log('   1. Close all WhatsApp Web tabs in your browser');
+        console.log('   2. Restart this bot (Ctrl+C then npm start)');
+        console.log('   3. Make sure your phone has internet connection');
+        console.log('   4. Update WhatsApp to the latest version on your phone\n');
     });
 
     client.on('disconnected', (reason) => {
         console.log('⚠️  WhatsApp disconnected:', reason);
+        console.log('🔄 Bot will attempt to reconnect...\n');
     });
 
     client.on('remote_session_saved', () => {
