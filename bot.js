@@ -885,7 +885,8 @@ async function handleMessage(message) {
         // - In Groups: Can ONLY create business reminders (prevents personal info leaks)
         // - Regular users: Business features only
         if (isAdmin) {
-            const personalIntent = detectPersonalIntent(message.body, {
+            // Use AI-powered intent classification (async)
+            const personalIntent = await detectPersonalIntent(message.body, {
                 isGroup: chat.isGroup
             });
 
@@ -893,14 +894,15 @@ async function handleMessage(message) {
             // In DM: Allow ALL personal features
             const allowInGroup = chat.isGroup && (
                 personalIntent.type === 'reminder' ||
-                personalIntent.type === 'calendar_query'
+                personalIntent.type === 'calendar_query' ||
+                personalIntent.type === 'delete_reminder'
             );
             const allowInDM = !chat.isGroup && personalIntent.isPersonal;
 
             if (allowInGroup || allowInDM) {
                 const location = chat.isGroup ? `group: ${chat.name}` : 'private DM';
                 const reminderType = chat.isGroup ? 'business' : 'personal/business';
-                console.log(`🤖 ${personalIntent.type} detected (${location}, ${reminderType})`);
+                console.log(`🤖 ${personalIntent.type} detected (${location}, ${reminderType}, confidence: ${personalIntent.confidence})`);
 
                 try {
                     const personalResponse = await handlePersonalRequest(message.body, senderId, {

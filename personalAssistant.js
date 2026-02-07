@@ -3,60 +3,38 @@
 
 const reminderHandler = require('./reminderHandler');
 const financialAdvisor = require('./financialAdvisor');
+const { classifyPersonalIntent } = require('./personalIntentRouter');
 
 /**
  * Detect if message is a personal assistant request
+ * Uses AI-powered intent classification instead of fragile regex patterns
  * @param {string} message - User's message
  * @param {Object} context - Chat context (isGroup, etc.)
- * @returns {Object} - { isPersonal: boolean, type: string, isGroupReminder: boolean }
+ * @returns {Promise<Object>} - { isPersonal: boolean, type: string, isGroupReminder: boolean, confidence: number }
  */
-function detectPersonalIntent(message, context = {}) {
-    const lower = message.toLowerCase();
+async function detectPersonalIntent(message, context = {}) {
+    // Use AI to classify intent (Claude Haiku - fast & cheap)
+    const intent = await classifyPersonalIntent(message, {
+        isGroup: context.isGroup,
+        hasPendingConfirmation: reminderHandler.pendingConfirmations.size > 0
+    });
 
-    // IMPORTANT: Check delete/cancel/remove FIRST before general reminder pattern
-    // This prevents "delete reminder" from matching "reminder" pattern
-    if (/delete\s+(last\s+)?reminder|cancel\s+(last\s+)?reminder|remove\s+(last\s+)?reminder/i.test(message)) {
-        return { isPersonal: true, type: 'delete_reminder' };
-    }
+    // Map AI intent to our handler types
+    const intentMap = {
+        'delete_reminder': 'delete_reminder',
+        'confirm_reminder': 'confirm_reminder',
+        'cancel_reminder': 'cancel_reminder',
+        'list_reminders': 'calendar_query',
+        'create_reminder': 'reminder',
+        'general_query': null
+    };
 
-    // Calendar/Schedule patterns
-    if (/my\s+schedule|what'?s\s+on|my\s+reminders|list\s+reminders|show\s+reminders/i.test(message)) {
-        return { isPersonal: true, type: 'calendar_query' };
-    }
-
-    // Group reminder patterns (e.g., "remind me to message this group...")
-    const isGroupReminder = /remind\s+me\s+to\s+(message|post|send|tell|text|notify)\s+(this\s+)?(group|chat|here)/i.test(message) ||
-                           /remind\s+(this\s+)?(group|chat)/i.test(message);
-
-    // Reminder patterns (flexible to catch variations like "remind me", "remind to", "reminder", etc.)
-    // NOTE: This pattern matches "reminder" keyword, so specific commands like "delete reminder" must be checked FIRST
-    if (/remind(\s+me|\s+to)?|reminder|set\s+reminder|alert\s+me|notify\s+me/i.test(message)) {
-        return {
-            isPersonal: true,
-            type: 'reminder',
-            isGroupReminder: isGroupReminder && context.isGroup
-        };
-    }
-
-    // Confirmation responses (yes/no) - check if there's a pending confirmation
-    if (/^(yes|yeah|yep|ok|okay|sure|confirm)$/i.test(message.trim())) {
-        if (reminderHandler.pendingConfirmations.size > 0) {
-            return { isPersonal: true, type: 'confirm_reminder' };
-        }
-    }
-
-    if (/^(no|nope|cancel|nevermind|never\s+mind)$/i.test(message.trim())) {
-        if (reminderHandler.pendingConfirmations.size > 0) {
-            return { isPersonal: true, type: 'cancel_reminder' };
-        }
-    }
-
-    // Financial patterns
-    if (/spent|expense|budget|financial|money|save|saving|debt/i.test(message)) {
-        return { isPersonal: true, type: 'financial' };
-    }
-
-    return { isPersonal: false, type: null };
+    return {
+        isPersonal: intent.isPersonal,
+        type: intentMap[intent.intent] || null,
+        isGroupReminder: intent.isGroupReminder || false,
+        confidence: intent.confidence
+    };
 }
 
 /**
