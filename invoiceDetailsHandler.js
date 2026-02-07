@@ -272,19 +272,11 @@ function formatCustomerInvoices(result, language = 'zh') {
         `总金额: RM${result.totalAmount.toFixed(2)}\n\n` :
         `Total Amount: RM${result.totalAmount.toFixed(2)}\n\n`;
 
-    // List invoices (up to 10)
-    const invoicesToShow = result.invoices.slice(0, 10);
-
-    for (const invoice of invoicesToShow) {
+    // List all invoices (no limit)
+    for (const invoice of result.invoices) {
         const statusIcon = invoice.status === 'paid' ? '✅' : '⚠️';
         message += `${statusIcon} ${invoice.invoiceNo} (${invoice.date})\n`;
         message += `   RM${invoice.total.toFixed(2)} • ${invoice.itemCount} ${language === 'zh' ? '项' : 'items'}\n\n`;
-    }
-
-    if (result.invoices.length > 10) {
-        message += language === 'zh' ?
-            `...还有 ${result.invoices.length - 10} 张发票` :
-            `...and ${result.invoices.length - 10} more invoices`;
     }
 
     return message;

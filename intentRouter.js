@@ -62,7 +62,8 @@ AVAILABLE INTENTS:
    Examples: "Show January invoices", "last 7 days", "this month sales", "invoices from 1/1 to 31/1"
 
 5. "product_search" - User searches for invoices containing specific products/items
-   Examples: "sharkfin sales", "invoices with sea cucumber", "how much X did we sell?"
+   Examples: "sharkfin sales", "invoices with sea cucumber", "how much X did we sell?", "dried abalone", "show me hook sales"
+   NOTE: Extract the PRODUCT NAME into the "productName" field (e.g., "sharkfin" from "sharkfin sales")
 
 6. "top_customers" - User wants customer rankings or analytics
    Examples: "top 5 customers", "who are my best customers?", "customer ranking by revenue"
@@ -150,6 +151,15 @@ RULES:
         }
         if (intent.invoiceNumber) {
             console.log(`   Invoice: ${intent.invoiceNumber}`);
+        }
+        if (intent.productName) {
+            console.log(`   Product: ${intent.productName}`);
+        }
+        if (intent.days) {
+            console.log(`   Days: ${intent.days}`);
+        }
+        if (intent.limit) {
+            console.log(`   Limit: ${intent.limit}`);
         }
 
         return intent;
@@ -257,9 +267,7 @@ async function routeQuery(intent, question, businessData, handlers) {
                 }
 
                 // Check if they want unpaid only
-                const filters = {
-                    limit: 20 // Show last 20 invoices
-                };
+                const filters = {};
 
                 if (question.toLowerCase().includes('unpaid') || question.toLowerCase().includes('欠') || question.toLowerCase().includes('未付')) {
                     filters.unpaidOnly = true;
