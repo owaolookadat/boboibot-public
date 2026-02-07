@@ -93,24 +93,15 @@ function formatDateRange(result, language = 'en') {
         ? `• 已付: ${result.paidCount} | 未付: ${result.unpaidCount}\n\n`
         : `• Paid: ${result.paidCount} | Unpaid: ${result.unpaidCount}\n\n`;
 
-    // Show recent invoices (limit to 10)
-    const invoicesToShow = result.invoices.slice(0, 10);
-
-    if (invoicesToShow.length > 0) {
+    // Show all invoices
+    if (result.invoices.length > 0) {
         response += language === 'zh' ? `📋 发票列表:\n\n` : `📋 Invoice List:\n\n`;
 
-        for (const invoice of invoicesToShow) {
+        for (const invoice of result.invoices) {
             const statusEmoji = invoice.status.toLowerCase() === 'paid' ? '✅' : '⚠️';
             response += `${statusEmoji} ${invoice.invoiceNo} (${invoice.date})\n`;
             response += `   ${invoice.customer}\n`;
             response += `   ${formatCurrency(invoice.amount)}\n\n`;
-        }
-
-        if (result.invoices.length > 10) {
-            const remaining = result.invoices.length - 10;
-            response += language === 'zh'
-                ? `...还有 ${remaining} 张发票\n`
-                : `...and ${remaining} more invoices\n`;
         }
     }
 

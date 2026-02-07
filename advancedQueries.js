@@ -128,7 +128,7 @@ function getInvoicesByDateRange(invoiceData, startDate, endDate) {
     const headers = invoiceData[0];
     const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
-    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor'));
+    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
     const statusIndex = headers.findIndex(h => h && h.toLowerCase().includes('payment') && h.toLowerCase().includes('status'));
 
@@ -238,7 +238,7 @@ function searchInvoicesByProduct(invoiceData, productName) {
         h.toLowerCase().includes('description')
     ));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
-    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor'));
+    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const qtyIndex = headers.findIndex(h => h && (h.toLowerCase().includes('qty') || h.toLowerCase().includes('quantity')));
     const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
     const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
@@ -307,7 +307,7 @@ function getTopCustomers(invoiceData, limit = 10, sortBy = 'revenue') {
     }
 
     const headers = invoiceData[0];
-    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor'));
+    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
     const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
@@ -383,7 +383,7 @@ function getInactiveCustomers(invoiceData, days = 60) {
     }
 
     const headers = invoiceData[0];
-    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor'));
+    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
     const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
 
@@ -446,7 +446,7 @@ function getOverdueInvoices(invoiceData, days = 30) {
     }
 
     const headers = invoiceData[0];
-    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor'));
+    const customerIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
     const statusIndex = headers.findIndex(h => h && h.toLowerCase().includes('payment') && h.toLowerCase().includes('status'));
     const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
