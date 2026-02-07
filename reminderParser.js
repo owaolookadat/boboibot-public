@@ -6,6 +6,9 @@ const chrono = require('chrono-node');
 // Configure timezone for Malaysia (UTC+8)
 const MALAYSIA_TIMEZONE_OFFSET = 8 * 60; // 8 hours in minutes
 
+// Use GB locale for dd/mm/yyyy format (international/Malaysia standard)
+const chronoGB = chrono.en_GB;
+
 /**
  * Parse natural language into structured reminder data
  * @param {string} input - User's message (e.g., "Remind me to call John at 3pm tomorrow")
@@ -18,8 +21,8 @@ function parseReminder(input) {
     // Get current time in Malaysia timezone
     const nowMalaysia = new Date();
 
-    // Parse date and time using chrono with reference to Malaysia time
-    const parsedDate = chrono.parse(input, nowMalaysia, { forwardDate: true });
+    // Parse date and time using GB locale (dd/mm/yyyy) with reference to Malaysia time
+    const parsedDate = chronoGB.parse(input, nowMalaysia, { forwardDate: true });
 
     if (parsedDate.length === 0) {
         return {
