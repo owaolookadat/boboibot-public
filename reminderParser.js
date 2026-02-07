@@ -6,9 +6,6 @@ const chrono = require('chrono-node');
 // Configure timezone for Malaysia (UTC+8)
 const MALAYSIA_TIMEZONE_OFFSET = 8 * 60; // 8 hours in minutes
 
-// Use GB locale for dd/mm/yyyy format (international/Malaysia standard)
-const chronoGB = chrono.en_GB;
-
 /**
  * Parse natural language into structured reminder data
  * @param {string} input - User's message (e.g., "Remind me to call John at 3pm tomorrow")
@@ -21,8 +18,20 @@ function parseReminder(input) {
     // Get current time in Malaysia timezone
     const nowMalaysia = new Date();
 
-    // Parse date and time using GB locale (dd/mm/yyyy) with reference to Malaysia time
-    const parsedDate = chronoGB.parse(input, nowMalaysia, { forwardDate: true });
+    // Pre-process input to handle dd/mm/yyyy format
+    // Convert dates like "8/2/26" or "8/2/2026" to disambiguated format
+    let processedInput = input;
+    const datePattern = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/g;
+    processedInput = processedInput.replace(datePattern, (match, d, m, y) => {
+        // Convert dd/mm/yyyy to "d month yyyy" format that chrono understands unambiguously
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthIndex = parseInt(m) - 1;
+        const year = y.length === 2 ? `20${y}` : y;
+        return `${d} ${months[monthIndex]} ${year}`;
+    });
+
+    // Parse date and time using chrono with reference to Malaysia time
+    const parsedDate = chrono.parse(processedInput, nowMalaysia, { forwardDate: true });
 
     if (parsedDate.length === 0) {
         return {
