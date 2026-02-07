@@ -196,7 +196,8 @@ function getCustomerInvoices(invoiceData, customerName, filters = {}) {
         const docNo = row[docNoIndex] || '';
         const status = (row[statusIndex] || '').toLowerCase();
         const date = row[dateIndex] || '';
-        const subTotal = parseFloat(row[subTotalIndex]) || 0;
+        const subTotalStr = (row[subTotalIndex] || '0').toString().replace(/,/g, '');
+        const subTotal = parseFloat(subTotalStr) || 0;
 
         // Skip if not matching customer
         if (!customerName || !rowCustomer.includes(customerName.toLowerCase())) {
