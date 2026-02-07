@@ -250,6 +250,63 @@ Functions to build:
 10. Quick stats dashboard functions
 11. Customer ranking functions
 12. Overdue tracking functions
+13. Mobile UX formatting utilities
+
+---
+
+## 📱 MOBILE UX IMPROVEMENTS (APPROVED)
+
+**Problem:** WhatsApp on small phone screen - responses too long, hard to scan
+
+**Solution - 3 Phases:**
+
+### **Phase 1: Core Formatting** (With next deployment)
+- ✅ Consistent icons/emojis (💰 📅 👤 📋 ✅ ⚠️)
+- ✅ Abbreviated numbers: RM30,680 → RM30.7k (for >10k)
+- ✅ Short dates: 05/01/2026 → 5/1
+- ✅ Compact invoice layout (single line per item)
+- ✅ Remove filler words, max brevity
+
+### **Phase 2: Progressive Disclosure** (After testing Phase 1)
+- ✅ Three-level system: Overview → Category → Detail
+- ✅ Default: Show summary + top 5 items only
+- ✅ Add "show all" / "full details" prompts
+- ✅ Context-aware: Adapt to data volume
+
+### **Phase 3: Interactive Prompts** (After Phase 2)
+- ✅ Helpful follow-up suggestions
+- ✅ Quick action prompts ("unpaid", "recent", etc.)
+- ✅ Teach users bot capabilities
+
+**Example - Before:**
+```
+📋 Invoice Details
+IV-2601-046
+Customer: TEKKAH FROZEN SEAFOOD
+Date: 31/01/2026
+Status: ⚠️ Unpaid
+Items (3):
+• DRIED SHARKFIN HOOK 4-5"
+  24.5 × RM900.00 = RM22,050.00
+...
+(15 more lines)
+```
+
+**Example - After (Phase 1):**
+```
+📋 2601046 | ⚠️ UNPAID
+Tekkah • 31/1
+
+• Sharkfin 4-5" | 24.5kg | RM22k
+• 牙拣必 | 14.9kg | RM12.7k
+• Sea Cucumber | 10.2kg | RM10.5k
+
+Total: RM45.2k
+
+Reply "full" for details
+```
+
+**Full details:** See `MOBILE_UX_IMPROVEMENTS.md`
 
 ---
 
