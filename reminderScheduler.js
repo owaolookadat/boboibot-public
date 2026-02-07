@@ -41,6 +41,10 @@ class ReminderScheduler {
         this.intervalId = setInterval(() => this.checkReminders(), CHECK_INTERVAL);
         console.log('✅ Reminder scheduler started (checking every 30s)');
 
+        // Run first check immediately to test
+        console.log('🚀 Running initial reminder check...');
+        this.checkReminders();
+
         // Clean up old reminders once a day
         this.cleanupIntervalId = setInterval(() => this.cleanupOldReminders(), 24 * 60 * 60 * 1000);
         // Run cleanup immediately on start
