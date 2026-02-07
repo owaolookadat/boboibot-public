@@ -591,6 +591,13 @@ async function handleMessage(message) {
 
             const shouldRespond = mentionedMe || mentionedInIds || startsWithBot || startsWithJjbot || isReplyToBot || hasActiveConversation;
 
+            // Debug logging for mention detection
+            if (message.mentionedIds && message.mentionedIds.length > 0) {
+                console.log(`📢 Mentions detected: ${JSON.stringify(message.mentionedIds)}`);
+                console.log(`🤖 Bot ID: ${botId}, Bot ID Short: ${botIdShort}`);
+                console.log(`✓ Should respond: ${shouldRespond} (mentioned: ${mentionedMe || mentionedInIds})`);
+            }
+
             if (!shouldRespond) {
                 return;
             }
