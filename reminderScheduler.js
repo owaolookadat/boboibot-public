@@ -68,9 +68,13 @@ class ReminderScheduler {
      */
     async checkReminders() {
         try {
+            console.log('🔍 Checking for due reminders...');
+
             // Read reminders
             const data = await fs.readFile(REMINDERS_FILE, 'utf8');
             const reminders = JSON.parse(data);
+
+            console.log(`📊 Total reminders in file: ${reminders.length}`);
 
             const now = new Date();
             const dueReminders = reminders.filter(r => {
@@ -78,7 +82,13 @@ class ReminderScheduler {
                 const timeDiff = reminderTime - now;
 
                 // Trigger if within the last 30 seconds (to account for check interval)
-                return timeDiff <= 0 && timeDiff > -30000 && !r.notified;
+                const isDue = timeDiff <= 0 && timeDiff > -30000 && !r.notified;
+
+                if (isDue) {
+                    console.log(`⏰ Reminder due: ${r.task} (time diff: ${timeDiff}ms)`);
+                }
+
+                return isDue;
             });
 
             if (dueReminders.length > 0) {
