@@ -63,18 +63,25 @@ function askForClarification(parsed, userId) {
 /**
  * Create confirmation message
  */
-function createConfirmation(parsed, userId) {
+function createConfirmation(parsed, userId, context = {}) {
     const confirmationId = `conf_${Date.now()}_${userId}`;
 
-    // Store pending confirmation
+    // Store pending confirmation with context
     pendingConfirmations.set(confirmationId, {
         userId,
         parsed,
+        context,
         timestamp: Date.now()
     });
 
     // Build confirmation message
     let response = '📋 Confirm reminder details:\n\n';
+
+    // Show context for business reminders
+    if (context.isGroupReminder && context.groupName) {
+        response += `🏢 Group: ${context.groupName}\n`;
+    }
+
     response += `📝 Task: "${parsed.task}"\n`;
     response += `📅 When: ${formatDateTime(parsed.datetime)}\n`;
 
@@ -108,9 +115,9 @@ async function handleConfirmation(confirmationId, confirmed) {
         return '❌ Reminder cancelled.';
     }
 
-    // Create the reminder
+    // Create the reminder with context
     try {
-        const result = await createReminder(pending.parsed, pending.userId);
+        const result = await createReminder(pending.parsed, pending.userId, pending.context);
         return result;
     } catch (error) {
         console.error('Error creating reminder:', error);
@@ -121,7 +128,7 @@ async function handleConfirmation(confirmationId, confirmed) {
 /**
  * Create reminder in calendar and local storage
  */
-async function createReminder(parsed, userId) {
+async function createReminder(parsed, userId, context = {}) {
     const reminder = {
         id: `rem_${Date.now()}`,
         userId,
@@ -129,7 +136,11 @@ async function createReminder(parsed, userId) {
         datetime: parsed.datetime,
         repeat: parsed.repeat,
         created: new Date().toISOString(),
-        calendarEventId: null
+        calendarEventId: null,
+        // Business context
+        type: context.isGroupReminder ? 'business' : 'personal',
+        groupChatId: context.chatId || null,
+        groupName: context.groupName || null
     };
 
     // Try to create in Google Calendar
@@ -153,6 +164,14 @@ async function createReminder(parsed, userId) {
 
     // Build success response
     let response = '✅ Reminder created!\n\n';
+
+    // Show type and context
+    if (reminder.type === 'business') {
+        response += `🏢 Business (${reminder.groupName})\n`;
+    } else {
+        response += `🏠 Personal\n`;
+    }
+
     response += `📝 ${parsed.task}\n`;
     response += `📅 ${formatDateTime(parsed.datetime)}\n`;
 
@@ -205,49 +224,74 @@ async function saveReminderLocally(reminder) {
 
 /**
  * List user's reminders
+ * @param {string} userId - User ID
+ * @param {Object} context - Context (isGroup, chatId)
  */
-async function listReminders(userId, upcoming = true) {
+async function listReminders(userId, context = {}) {
     try {
-        // Try calendar first
-        if (calendarManager.initialized) {
-            const events = await calendarManager.listUpcomingReminders(10);
-
-            if (events.length === 0) {
-                return '📅 No upcoming reminders';
-            }
-
-            let response = `📅 Your upcoming reminders (${events.length}):\n\n`;
-
-            events.forEach((event, index) => {
-                const start = new Date(event.start.dateTime || event.start.date);
-                response += `${index + 1}. ${event.summary}\n`;
-                response += `   ${formatDateTime(start)}\n\n`;
-            });
-
-            return response;
-        }
-
-        // Fallback to local storage
+        // Read from local storage
         const data = await fs.readFile(REMINDERS_FILE, 'utf8');
         const reminders = JSON.parse(data);
 
-        const userReminders = reminders
-            .filter(r => r.userId === userId)
-            .filter(r => upcoming ? new Date(r.datetime) > new Date() : true)
-            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+        let filteredReminders;
 
-        if (userReminders.length === 0) {
-            return '📅 No reminders found';
+        if (context.isGroup) {
+            // In groups: Show ONLY business reminders for THIS group
+            filteredReminders = reminders
+                .filter(r => r.userId === userId)
+                .filter(r => r.type === 'business')
+                .filter(r => r.groupChatId === context.chatId)
+                .filter(r => new Date(r.datetime) > new Date())
+                .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+            if (filteredReminders.length === 0) {
+                return `📅 No business reminders for this group`;
+            }
+
+            let response = `🏢 Business reminders for ${context.groupName} (${filteredReminders.length}):\n\n`;
+
+            filteredReminders.slice(0, 10).forEach((reminder, index) => {
+                response += `${index + 1}. ${reminder.task}\n`;
+                response += `   ${formatDateTime(new Date(reminder.datetime))}\n\n`;
+            });
+
+            return response;
+
+        } else {
+            // In DM: Show EVERYTHING (personal + all business)
+            filteredReminders = reminders
+                .filter(r => r.userId === userId)
+                .filter(r => new Date(r.datetime) > new Date())
+                .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+            if (filteredReminders.length === 0) {
+                return '📅 No upcoming reminders';
+            }
+
+            // Group by type
+            const personal = filteredReminders.filter(r => r.type === 'personal');
+            const business = filteredReminders.filter(r => r.type === 'business');
+
+            let response = `📅 All your reminders (${filteredReminders.length}):\n\n`;
+
+            if (personal.length > 0) {
+                response += `🏠 Personal (${personal.length}):\n`;
+                personal.slice(0, 5).forEach((reminder, index) => {
+                    response += `${index + 1}. ${reminder.task}\n`;
+                    response += `   ${formatDateTime(new Date(reminder.datetime))}\n\n`;
+                });
+            }
+
+            if (business.length > 0) {
+                response += `🏢 Business (${business.length}):\n`;
+                business.slice(0, 5).forEach((reminder, index) => {
+                    response += `${index + 1}. ${reminder.task} (${reminder.groupName})\n`;
+                    response += `   ${formatDateTime(new Date(reminder.datetime))}\n\n`;
+                });
+            }
+
+            return response;
         }
-
-        let response = `📅 Your reminders (${userReminders.length}):\n\n`;
-
-        userReminders.slice(0, 10).forEach((reminder, index) => {
-            response += `${index + 1}. ${reminder.task}\n`;
-            response += `   ${formatDateTime(new Date(reminder.datetime))}\n\n`;
-        });
-
-        return response;
     } catch (error) {
         return '📅 No reminders found';
     }

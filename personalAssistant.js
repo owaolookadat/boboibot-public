@@ -85,7 +85,11 @@ async function handlePersonalRequest(message, userId, context = {}) {
                 }
 
             case 'calendar_query':
-                return await reminderHandler.listReminders(userId);
+                return await reminderHandler.listReminders(userId, {
+                    isGroup: context.isGroup,
+                    chatId: context.chatId,
+                    groupName: context.groupName
+                });
 
             case 'delete_reminder':
                 return await reminderHandler.deleteLastReminder(userId);

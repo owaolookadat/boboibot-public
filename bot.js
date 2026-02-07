@@ -874,17 +874,29 @@ async function handleMessage(message) {
             }
         }
 
-        // CHECK FOR PERSONAL ASSISTANT REQUESTS FIRST
-        // (Reminders, calendar, personal finance, etc.)
-        // ONLY FOR ADMIN in private DMs
-        // Regular users can ONLY use business features
-        if (!chat.isGroup && isAdmin) {
+        // CHECK FOR PERSONAL ASSISTANT REQUESTS
+        // ADMIN ONLY - Standard Operating Procedure:
+        // - In DM: Can create BOTH personal AND business reminders, all features
+        // - In Groups: Can ONLY create business reminders (prevents personal info leaks)
+        // - Regular users: Business features only
+        if (isAdmin) {
             const personalIntent = detectPersonalIntent(message.body, {
                 isGroup: chat.isGroup
             });
 
-            if (personalIntent.isPersonal) {
-                console.log(`🤖 Personal assistant request detected: ${personalIntent.type} (admin only)`);
+            // In groups: ONLY allow business reminders (reminder/calendar_query)
+            // In DM: Allow ALL personal features
+            const allowInGroup = chat.isGroup && (
+                personalIntent.type === 'reminder' ||
+                personalIntent.type === 'calendar_query'
+            );
+            const allowInDM = !chat.isGroup && personalIntent.isPersonal;
+
+            if (allowInGroup || allowInDM) {
+                const location = chat.isGroup ? `group: ${chat.name}` : 'private DM';
+                const reminderType = chat.isGroup ? 'business' : 'personal/business';
+                console.log(`🤖 ${personalIntent.type} detected (${location}, ${reminderType})`);
+
                 try {
                     const personalResponse = await handlePersonalRequest(message.body, senderId, {
                         chat,
