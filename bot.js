@@ -39,6 +39,7 @@ const {
 const { detectPersonalIntent, handlePersonalRequest } = require('./personalAssistant');
 const calendarManager = require('./calendarManager');
 const financialAdvisor = require('./financialAdvisor');
+const reminderScheduler = require('./reminderScheduler');
 require('dotenv').config();
 
 // Admin Configuration
@@ -427,6 +428,10 @@ async function initializeWhatsAppClient(store) {
         console.log('\n✅ WhatsApp Bot is ready!');
         console.log('📞 Your bot is now listening for messages...\n');
         qrCount = 0; // Reset counter on success
+
+        // Initialize and start reminder scheduler
+        reminderScheduler.initialize(client);
+        reminderScheduler.start();
     });
 
     client.on('authenticated', () => {
@@ -1033,6 +1038,7 @@ async function startBot() {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n\n👋 Shutting down bot...');
+    reminderScheduler.stop();
     await client.destroy();
     process.exit(0);
 });
