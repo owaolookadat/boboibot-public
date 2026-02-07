@@ -876,13 +876,22 @@ async function handleMessage(message) {
 
         // CHECK FOR PERSONAL ASSISTANT REQUESTS FIRST
         // (Reminders, calendar, personal finance, etc.)
-        // ONLY in private DMs with admin - NOT in groups
+        // ONLY FOR ADMIN in private DMs
+        // Regular users can ONLY use business features
         if (!chat.isGroup && isAdmin) {
-            const personalIntent = detectPersonalIntent(message.body);
+            const personalIntent = detectPersonalIntent(message.body, {
+                isGroup: chat.isGroup
+            });
+
             if (personalIntent.isPersonal) {
-                console.log(`🤖 Personal assistant request detected: ${personalIntent.type}`);
+                console.log(`🤖 Personal assistant request detected: ${personalIntent.type} (admin only)`);
                 try {
-                    const personalResponse = await handlePersonalRequest(message.body, senderId, { chat });
+                    const personalResponse = await handlePersonalRequest(message.body, senderId, {
+                        chat,
+                        isGroup: chat.isGroup,
+                        chatId: chat.id._serialized,
+                        groupName: chat.name
+                    });
                     if (personalResponse) {
                         await message.reply(personalResponse);
                         return; // Don't process as business query

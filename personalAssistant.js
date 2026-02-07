@@ -7,14 +7,23 @@ const financialAdvisor = require('./financialAdvisor');
 /**
  * Detect if message is a personal assistant request
  * @param {string} message - User's message
- * @returns {Object} - { isPersonal: boolean, type: string }
+ * @param {Object} context - Chat context (isGroup, etc.)
+ * @returns {Object} - { isPersonal: boolean, type: string, isGroupReminder: boolean }
  */
-function detectPersonalIntent(message) {
+function detectPersonalIntent(message, context = {}) {
     const lower = message.toLowerCase();
+
+    // Group reminder patterns (e.g., "remind me to message this group...")
+    const isGroupReminder = /remind\s+me\s+to\s+(message|post|send|tell|text|notify)\s+(this\s+)?(group|chat|here)/i.test(message) ||
+                           /remind\s+(this\s+)?(group|chat)/i.test(message);
 
     // Reminder patterns
     if (/remind\s+me|reminder|set\s+reminder|alert\s+me|notify\s+me/i.test(message)) {
-        return { isPersonal: true, type: 'reminder' };
+        return {
+            isPersonal: true,
+            type: 'reminder',
+            isGroupReminder: isGroupReminder && context.isGroup
+        };
     }
 
     // Calendar/Schedule patterns
@@ -52,18 +61,22 @@ function detectPersonalIntent(message) {
  * Handle personal assistant requests
  * @param {string} message - User's message
  * @param {string} userId - WhatsApp user ID
- * @param {Object} context - Additional context (chat type, etc.)
+ * @param {Object} context - Additional context (chat type, chatId, etc.)
  * @returns {Promise<string>} - Response message
  */
 async function handlePersonalRequest(message, userId, context = {}) {
-    const intent = detectPersonalIntent(message);
+    const intent = detectPersonalIntent(message, context);
 
-    console.log(`🤖 Personal intent detected: ${intent.type}`);
+    console.log(`🤖 Personal intent detected: ${intent.type}`, intent.isGroupReminder ? '(Group reminder)' : '');
 
     try {
         switch (intent.type) {
             case 'reminder':
-                const result = await reminderHandler.handleReminderRequest(message, userId);
+                const result = await reminderHandler.handleReminderRequest(message, userId, {
+                    isGroupReminder: intent.isGroupReminder,
+                    chatId: context.chatId,
+                    groupName: context.groupName
+                });
                 if (typeof result === 'string') {
                     return result;
                 } else {

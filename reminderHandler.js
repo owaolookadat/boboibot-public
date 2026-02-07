@@ -14,20 +14,31 @@ const REMINDERS_FILE = path.join(__dirname, 'data', 'reminders.json');
 
 /**
  * Handle reminder request from user
+ * @param {string} message - User's message
+ * @param {string} userId - User ID
+ * @param {Object} context - Context (isGroupReminder, chatId, groupName)
  */
-async function handleReminderRequest(message, userId) {
+async function handleReminderRequest(message, userId, context = {}) {
     // Parse the reminder
     const parsed = parseReminder(message);
 
     console.log('📝 Parsed reminder:', parsed);
 
+    // Clean up "message this group" from task if it's a group reminder
+    if (context.isGroupReminder && parsed.task) {
+        parsed.task = parsed.task
+            .replace(/^(message|post|send|tell|text|notify)\s+(this\s+)?(group|chat|here)\s*/i, '')
+            .replace(/\s+(to|in)\s+(this\s+)?(group|chat|here)\s*/i, '')
+            .trim();
+    }
+
     // If confidence is low or needs more info, ask for clarification
     if (parsed.needsMoreInfo || parsed.confidence < 0.7) {
-        return askForClarification(parsed, userId);
+        return askForClarification(parsed, userId, context);
     }
 
     // High confidence - create confirmation
-    return createConfirmation(parsed, userId);
+    return createConfirmation(parsed, userId, context);
 }
 
 /**
