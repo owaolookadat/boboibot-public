@@ -36,6 +36,9 @@ const {
     formatInactiveCustomers,
     formatOverdueInvoices
 } = require('./advancedFormatters');
+const { detectPersonalIntent, handlePersonalRequest } = require('./personalAssistant');
+const calendarManager = require('./calendarManager');
+const financialAdvisor = require('./financialAdvisor');
 require('dotenv').config();
 
 // Admin Configuration
@@ -868,7 +871,25 @@ async function handleMessage(message) {
             }
         }
 
-        // AI-POWERED INTENT ROUTING
+        // CHECK FOR PERSONAL ASSISTANT REQUESTS FIRST
+        // (Reminders, calendar, personal finance, etc.)
+        const personalIntent = detectPersonalIntent(message.body);
+        if (personalIntent.isPersonal) {
+            console.log(`🤖 Personal assistant request detected: ${personalIntent.type}`);
+            try {
+                const personalResponse = await handlePersonalRequest(message.body, senderId, { chat });
+                if (personalResponse) {
+                    await message.reply(personalResponse);
+                    return; // Don't process as business query
+                }
+            } catch (error) {
+                console.error('❌ Personal assistant error:', error);
+                await message.reply(`❌ Sorry, I encountered an error: ${error.message}`);
+                return;
+            }
+        }
+
+        // AI-POWERED INTENT ROUTING (BUSINESS QUERIES)
         // Use Haiku to classify intent, then route to code function or fallback to Sonnet
         console.log('🤖 Classifying intent with AI...');
         const intent = await classifyIntent(message.body, businessData);
@@ -966,6 +987,17 @@ async function startBot() {
     // Initialize Redis cache
     console.log('🔧 Initializing cache system...');
     await initRedis();
+
+    // Initialize Personal Assistant modules
+    console.log('🤖 Initializing personal assistant...');
+    try {
+        await calendarManager.initialize();
+        await financialAdvisor.initialize();
+        console.log('✅ Personal assistant ready!');
+    } catch (error) {
+        console.log('⚠️  Personal assistant initialization failed:', error.message);
+        console.log('   Business bot will still work, personal features disabled\n');
+    }
 
     // Initialize WhatsApp
     client.initialize();
