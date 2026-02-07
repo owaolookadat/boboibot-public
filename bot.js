@@ -576,9 +576,17 @@ async function handleMessage(message) {
 
             const mentions = await message.getMentions();
             const mentionedMe = mentions.some(c => c.id._serialized === botId);
-            const mentionedInIds = message.mentionedIds && message.mentionedIds.some(id =>
-                id === botId || id.includes(botIdShort)
-            );
+
+            // Check if any mentioned ID matches bot (including different formats like @lid vs @c.us)
+            const mentionedInIds = message.mentionedIds && message.mentionedIds.some(id => {
+                // Extract number from ID (e.g., "190168971649220@lid" -> "190168971649220")
+                const mentionedNumber = id.split('@')[0];
+                // Check if it matches bot's number or if the bot was mentioned via contact name
+                return id === botId ||
+                       id.includes(botIdShort) ||
+                       mentionedNumber === botIdShort ||
+                       id.includes('190168971649220'); // Bot's WhatsApp number in groups
+            });
 
             const startsWithBot = message.body.toLowerCase().startsWith('!bot ');
             const startsWithJjbot = message.body.toLowerCase().startsWith('jjbot ');
