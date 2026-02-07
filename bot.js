@@ -358,8 +358,17 @@ async function initializeWhatsAppClient(store) {
         authStrategy: authStrategy,
         puppeteer: {
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        }
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu'
+            ]
+        },
+        authTimeoutMs: 120000 // Increase auth timeout to 2 minutes (default is 30s)
     });
 
     // WhatsApp Event Handlers
