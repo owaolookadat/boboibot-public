@@ -93,7 +93,7 @@ RULES:
 - For ambiguous queries, use "general_query" with lower confidence`;
 
         const response = await getAnthropicClient().messages.create({
-            model: "claude-3-5-haiku-20241022", // Fast & cheap for classification
+            model: "claude-3-haiku-20240307", // Fast & cheap for classification
             max_tokens: 300,
             messages: [{
                 role: "user",
