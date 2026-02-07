@@ -876,19 +876,22 @@ async function handleMessage(message) {
 
         // CHECK FOR PERSONAL ASSISTANT REQUESTS FIRST
         // (Reminders, calendar, personal finance, etc.)
-        const personalIntent = detectPersonalIntent(message.body);
-        if (personalIntent.isPersonal) {
-            console.log(`🤖 Personal assistant request detected: ${personalIntent.type}`);
-            try {
-                const personalResponse = await handlePersonalRequest(message.body, senderId, { chat });
-                if (personalResponse) {
-                    await message.reply(personalResponse);
-                    return; // Don't process as business query
+        // ONLY in private DMs with admin - NOT in groups
+        if (!chat.isGroup && isAdmin) {
+            const personalIntent = detectPersonalIntent(message.body);
+            if (personalIntent.isPersonal) {
+                console.log(`🤖 Personal assistant request detected: ${personalIntent.type}`);
+                try {
+                    const personalResponse = await handlePersonalRequest(message.body, senderId, { chat });
+                    if (personalResponse) {
+                        await message.reply(personalResponse);
+                        return; // Don't process as business query
+                    }
+                } catch (error) {
+                    console.error('❌ Personal assistant error:', error);
+                    await message.reply(`❌ Sorry, I encountered an error: ${error.message}`);
+                    return;
                 }
-            } catch (error) {
-                console.error('❌ Personal assistant error:', error);
-                await message.reply(`❌ Sorry, I encountered an error: ${error.message}`);
-                return;
             }
         }
 
