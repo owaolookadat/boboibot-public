@@ -312,13 +312,13 @@ async function askClaude(question, businessData, chatId, customerContext = null)
 
         // Build messages with conversation history
         const history = getConversationHistory(chatId);
-        const messages = [
-            { role: "user", content: context }
-        ];
+        const messages = [];
 
-        // Add conversation history
+        // Add conversation history (filter out any empty messages)
         for (const msg of history) {
-            messages.push(msg);
+            if (msg.content && msg.content.trim()) {
+                messages.push(msg);
+            }
         }
 
         // Add current question
@@ -328,7 +328,7 @@ async function askClaude(question, businessData, chatId, customerContext = null)
             model: "claude-sonnet-4-20250514",
             max_tokens: 1000,
             system: context,
-            messages: messages.length > 1 ? messages.slice(1) : [{ role: "user", content: question }]
+            messages: messages
         });
 
         const answer = response.content[0].text;
@@ -411,7 +411,9 @@ async function handleMessage(message) {
         console.log(`📋 Message type: ${message.type}, hasMedia: ${message.hasMedia}`);
 
         // Check admin status (used for multiple features)
-        const senderId = message.from;
+        // In groups: message.author is the actual sender, message.from is the group
+        // In DMs: message.from is the sender
+        const senderId = message.author || message.from;
         const isAdmin = senderId === ADMIN_NUMBER;
 
         // Handle file uploads (CSV processing) - Admin only
