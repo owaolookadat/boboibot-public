@@ -43,11 +43,14 @@ function checkPaymentStatus(invoiceData, customerName) {
             if (!unpaidInvoices.has(docNo)) {
                 unpaidInvoices.set(docNo, {
                     invoiceNo: docNo,
-                    amount: amount,
+                    amount: 0,
                     date: date,
                     items: []
                 });
             }
+            // Accumulate amounts for all line items
+            unpaidInvoices.get(docNo).amount += amount;
+
             // Track line items
             const itemDesc = row[headers.findIndex(h => h && h.toLowerCase().includes('description'))] || '';
             if (itemDesc) {
@@ -57,10 +60,12 @@ function checkPaymentStatus(invoiceData, customerName) {
             if (!paidInvoices.has(docNo)) {
                 paidInvoices.set(docNo, {
                     invoiceNo: docNo,
-                    amount: amount,
+                    amount: 0,
                     date: date
                 });
             }
+            // Accumulate amounts for all line items
+            paidInvoices.get(docNo).amount += amount;
         }
     }
 
