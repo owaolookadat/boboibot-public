@@ -11,11 +11,11 @@ function checkPaymentStatus(invoiceData, customerName) {
     }
 
     const headers = invoiceData[0];
-    const customerNameIndex = headers.findIndex(h => h && h.toLowerCase().includes('customer'));
+    const customerNameIndex = headers.findIndex(h => h && h.toLowerCase().includes('debtor') && !h.toLowerCase().includes('code'));
     const docNoIndex = headers.findIndex(h => h && h.toLowerCase().includes('doc') && h.toLowerCase().includes('no'));
-    const statusIndex = headers.findIndex(h => h && h.toLowerCase() === 'status');
-    const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('total'));
-    const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date'));
+    const statusIndex = headers.findIndex(h => h && h.toLowerCase().includes('payment') && h.toLowerCase().includes('status'));
+    const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
+    const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
 
     if (statusIndex === -1 || docNoIndex === -1) {
         return null;
