@@ -228,10 +228,13 @@ function getCurrentMonthInvoices(invoiceData) {
 
 function searchInvoicesByProduct(invoiceData, productName) {
     if (!invoiceData || invoiceData.length <= 1 || !productName) {
+        console.log('❌ Product search: Invalid input or no product name');
         return null;
     }
 
     const headers = invoiceData[0];
+    console.log('📋 Available columns:', headers.slice(0, 10).join(', '));
+
     const productIndex = headers.findIndex(h => h && (
         h.toLowerCase().includes('item') ||
         h.toLowerCase().includes('product') ||
@@ -243,7 +246,10 @@ function searchInvoicesByProduct(invoiceData, productName) {
     const amountIndex = headers.findIndex(h => h && h.toLowerCase().includes('sub') && h.toLowerCase().includes('total'));
     const dateIndex = headers.findIndex(h => h && h.toLowerCase().includes('date') && !h.toLowerCase().includes('payment'));
 
+    console.log(`🔍 Column indices - Product: ${productIndex}, Doc: ${docNoIndex}, Customer: ${customerIndex}`);
+
     if (productIndex === -1 || docNoIndex === -1) {
+        console.log('❌ Product search: Required columns not found');
         return null;
     }
 

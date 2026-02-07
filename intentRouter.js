@@ -325,15 +325,27 @@ async function routeQuery(intent, question, businessData, handlers) {
                 };
 
             case 'product_search':
-                console.log(`🔍 Routing to product search: ${intent.productName}`);
+                console.log(`🔍 Routing to product search: "${intent.productName}"`);
+                console.log(`   Confidence: ${intent.confidence}`);
                 const productData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
 
-                if (!productData || !intent.productName || !handlers.searchInvoicesByProduct) {
+                if (!productData) {
+                    console.log('❌ No invoice data available');
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                if (!intent.productName) {
+                    console.log('❌ No product name extracted from query');
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                if (!handlers.searchInvoicesByProduct) {
+                    console.log('❌ searchInvoicesByProduct handler not found');
                     return { handled: false, response: null, useAI: true };
                 }
 
                 const productResult = handlers.searchInvoicesByProduct(productData, intent.productName);
-                const productResponse = handlers.formatProductSearch(productResult, intent.language);
+                const productResponse = handlers.formatProductSearch(productResult, intent.language, intent.productName);
 
                 return {
                     handled: true,

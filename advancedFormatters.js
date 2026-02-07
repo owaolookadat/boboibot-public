@@ -102,11 +102,11 @@ function formatDateRange(result, language = 'en') {
 /**
  * Format product search response
  */
-function formatProductSearch(result, language = 'en') {
+function formatProductSearch(result, language = 'en', searchTerm = '') {
     if (!result) {
         return language === 'zh'
-            ? `❌ 未找到 "${result?.searchTerm || '该产品'}" 的相关发票`
-            : `❌ No invoices found for "${result?.searchTerm || 'this product'}"`;
+            ? `❌ 未找到 "${searchTerm || '该产品'}" 的相关发票\n\n可能原因:\n• 产品名称不存在\n• 产品名称拼写错误\n• 数据未加载`
+            : `❌ No invoices found for "${searchTerm || 'this product'}"\n\nPossible reasons:\n• Product name doesn't exist\n• Misspelled product name\n• Data not loaded yet`;
     }
 
     const formatCurrency = (amount) => {
