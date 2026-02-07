@@ -45,7 +45,7 @@ async function detectPersonalIntent(message, context = {}) {
  * @returns {Promise<string>} - Response message
  */
 async function handlePersonalRequest(message, userId, context = {}) {
-    const intent = detectPersonalIntent(message, context);
+    const intent = await detectPersonalIntent(message, context);
 
     console.log(`🤖 Personal intent detected: ${intent.type}`, intent.isGroupReminder ? '(Group reminder)' : '');
 
