@@ -85,11 +85,12 @@ class ReminderScheduler {
                 const reminderTime = new Date(r.datetime);
                 const timeDiff = reminderTime - now;
 
-                // Trigger if within the last 30 seconds (to account for check interval)
-                const isDue = timeDiff <= 0 && timeDiff > -30000 && !r.notified;
+                // Trigger if past due but within last 5 minutes (generous window for testing)
+                // AND not yet notified
+                const isDue = timeDiff <= 0 && timeDiff > -300000 && !r.notified;
 
                 if (isDue) {
-                    console.log(`⏰ Reminder due: ${r.task} (time diff: ${timeDiff}ms)`);
+                    console.log(`⏰ Reminder due: ${r.task} (time diff: ${Math.round(timeDiff/1000)}s ago)`);
                 }
 
                 return isDue;
