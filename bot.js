@@ -790,23 +790,17 @@ async function handleMessage(message) {
             return;
         }
 
-        // DM from admin - personal mode (uses same AI pipeline as groups for consistency)
-        if (!chat.isGroup && isAdmin) {
-            console.log('📱 Private DM from admin');
-            const businessData = await getAllBusinessData();
-            const chatId = chat.id._serialized;
-            const answer = await askClaude(message.body, businessData, chatId, null);
-            await message.reply(answer);
-            console.log(`✅ Private response sent`);
-            return;
-        }
-
-        // Groups - business mode
+        // Get business data for both DMs and groups
         const businessData = await getAllBusinessData();
 
         if (Object.keys(businessData).length === 0) {
             await message.reply('⚠️ Unable to access business data. Please check Google Sheets connection.');
             return;
+        }
+
+        // Log message source
+        if (!chat.isGroup && isAdmin) {
+            console.log('📱 Private DM from admin');
         }
 
         // Extract customer context from group name (if applicable)
