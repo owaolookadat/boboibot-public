@@ -52,27 +52,49 @@ AVAILABLE INTENTS:
 1. "payment_status" - User asks if a customer owes money, has unpaid invoices, outstanding balance
    Examples: "Does X owe money?", "X欠钱吗", "outstanding for X", "unpaid invoices for X"
 
-2. "payment_update" - User wants to mark an invoice as paid/unpaid (admin only)
+2. "all_unpaid" - User wants to see ALL unpaid invoices across all customers
+   Examples: "list all unpaid invoices", "show me all customers with unpaid invoices", "total outstanding", "who owes money?"
+
+3. "payment_update" - User wants to mark an invoice as paid/unpaid (admin only)
    Examples: "Mark IV-2602-005 paid", "IV-123 已付款", "update payment status"
 
-3. "invoice_stats" - User asks for invoice statistics, counts, totals
+4. "date_range" - User asks for invoices within a date range or time period
+   Examples: "Show January invoices", "last 7 days", "this month sales", "invoices from 1/1 to 31/1"
+
+5. "product_search" - User searches for invoices containing specific products/items
+   Examples: "sharkfin sales", "invoices with sea cucumber", "how much X did we sell?"
+
+6. "top_customers" - User wants customer rankings or analytics
+   Examples: "top 5 customers", "who are my best customers?", "customer ranking by revenue"
+
+7. "inactive_customers" - User wants to see customers who haven't ordered recently
+   Examples: "who hasn't ordered in 2 months?", "inactive customers", "customers we lost"
+
+8. "overdue_invoices" - User asks about overdue/aging invoices
+   Examples: "overdue invoices", "who hasn't paid for 30 days?", "payment reminders needed"
+
+9. "invoice_stats" - User asks for invoice statistics, counts, totals
    Examples: "How many invoices?", "total sales", "invoice count for January"
 
-4. "invoice_details" - User wants to see specific invoice details
+10. "invoice_details" - User wants to see specific invoice details
    Examples: "Show invoice IV-123", "details for 2501006", "what's in invoice X"
    Note: Invoice numbers can be in formats: IV-2501-006, 2501006, IV2501006
 
-5. "customer_query" - General queries about a specific customer
-   Examples: "Show me X's invoices", "recent orders for X", "X's history", "X's unpaid invoices"
+11. "customer_query" - General queries about a specific customer
+   Examples: "Show me X's invoices", "recent orders for X", "X's history"
 
-6. "general_query" - Everything else that needs AI analysis
+12. "general_query" - Everything else that needs AI analysis
    Examples: "Why did sales drop?", "Compare X and Y", "trend analysis"
 
 Return ONLY a JSON object in this exact format (no markdown, no explanations):
 {
-  "intent": "payment_status|payment_update|invoice_stats|invoice_details|customer_query|general_query",
+  "intent": "payment_status|all_unpaid|payment_update|date_range|product_search|top_customers|inactive_customers|overdue_invoices|invoice_stats|invoice_details|customer_query|general_query",
   "customer": "EXACT CUSTOMER NAME FROM LIST or null",
   "invoiceNumber": "invoice number if mentioned, or null",
+  "dateRange": {"start": "DD/MM/YYYY", "end": "DD/MM/YYYY"} or null,
+  "productName": "product name if searching for specific item, or null",
+  "days": number of days for date-based queries (7 for "last week", 30 for "last month", etc.),
+  "limit": number of results to return (for top customers, default 10),
   "confidence": 0.0-1.0,
   "language": "zh|en",
   "parameters": {}
@@ -251,6 +273,130 @@ async function routeQuery(intent, question, businessData, handlers) {
                     response: customerResponse,
                     useAI: false,
                     intent: 'customer_query'
+                };
+
+            case 'all_unpaid':
+                console.log(`💰 Routing to all unpaid invoices query`);
+                const allUnpaidData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!allUnpaidData || !handlers.getAllUnpaidInvoices) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const allUnpaid = handlers.getAllUnpaidInvoices(allUnpaidData);
+                const allUnpaidResponse = handlers.formatAllUnpaid(allUnpaid, intent.language);
+
+                return {
+                    handled: true,
+                    response: allUnpaidResponse,
+                    useAI: false,
+                    intent: 'all_unpaid'
+                };
+
+            case 'date_range':
+                console.log(`📅 Routing to date range query`);
+                const dateData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!dateData || !handlers.getInvoicesByDateRange) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                let dateResult;
+                if (intent.days) {
+                    // Recent invoices (e.g., "last 7 days")
+                    dateResult = handlers.getRecentInvoices(dateData, intent.days);
+                } else if (intent.dateRange && intent.dateRange.start && intent.dateRange.end) {
+                    // Specific date range
+                    dateResult = handlers.getInvoicesByDateRange(dateData, intent.dateRange.start, intent.dateRange.end);
+                } else if (question.toLowerCase().includes('this month') || question.toLowerCase().includes('当月')) {
+                    // Current month
+                    dateResult = handlers.getCurrentMonthInvoices(dateData);
+                } else {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const dateResponse = handlers.formatDateRange(dateResult, intent.language);
+
+                return {
+                    handled: true,
+                    response: dateResponse,
+                    useAI: false,
+                    intent: 'date_range'
+                };
+
+            case 'product_search':
+                console.log(`🔍 Routing to product search: ${intent.productName}`);
+                const productData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!productData || !intent.productName || !handlers.searchInvoicesByProduct) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const productResult = handlers.searchInvoicesByProduct(productData, intent.productName);
+                const productResponse = handlers.formatProductSearch(productResult, intent.language);
+
+                return {
+                    handled: true,
+                    response: productResponse,
+                    useAI: false,
+                    intent: 'product_search'
+                };
+
+            case 'top_customers':
+                console.log(`👑 Routing to top customers query`);
+                const topCustomerData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!topCustomerData || !handlers.getTopCustomers) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const limit = intent.limit || 10;
+                const topCustomers = handlers.getTopCustomers(topCustomerData, limit);
+                const topCustomersResponse = handlers.formatTopCustomers(topCustomers, intent.language);
+
+                return {
+                    handled: true,
+                    response: topCustomersResponse,
+                    useAI: false,
+                    intent: 'top_customers'
+                };
+
+            case 'inactive_customers':
+                console.log(`😴 Routing to inactive customers query`);
+                const inactiveData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!inactiveData || !handlers.getInactiveCustomers) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const days = intent.days || 60;
+                const inactiveCustomers = handlers.getInactiveCustomers(inactiveData, days);
+                const inactiveResponse = handlers.formatInactiveCustomers(inactiveCustomers, intent.language);
+
+                return {
+                    handled: true,
+                    response: inactiveResponse,
+                    useAI: false,
+                    intent: 'inactive_customers'
+                };
+
+            case 'overdue_invoices':
+                console.log(`⏰ Routing to overdue invoices query`);
+                const overdueData = businessData['Invoice Detail Listing'] || businessData['Invoice Detail'];
+
+                if (!overdueData || !handlers.getOverdueInvoices) {
+                    return { handled: false, response: null, useAI: true };
+                }
+
+                const overdueDays = intent.days || 30;
+                const overdueInvoices = handlers.getOverdueInvoices(overdueData, overdueDays);
+                const overdueResponse = handlers.formatOverdueInvoices(overdueInvoices, intent.language);
+
+                return {
+                    handled: true,
+                    response: overdueResponse,
+                    useAI: false,
+                    intent: 'overdue_invoices'
                 };
 
             case 'payment_update':

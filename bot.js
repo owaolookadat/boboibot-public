@@ -18,6 +18,24 @@ const { initRedis, getCached, setCached, invalidateCache, clearAllCache, getCach
 const { checkPaymentStatus, formatPaymentStatus } = require('./paymentChecker');
 const { classifyIntent, routeQuery } = require('./intentRouter');
 const { getInvoiceDetails, formatInvoiceDetails, getCustomerInvoices, formatCustomerInvoices } = require('./invoiceDetailsHandler');
+const {
+    getAllUnpaidInvoices,
+    getInvoicesByDateRange,
+    getRecentInvoices,
+    getCurrentMonthInvoices,
+    searchInvoicesByProduct,
+    getTopCustomers,
+    getInactiveCustomers,
+    getOverdueInvoices
+} = require('./advancedQueries');
+const {
+    formatAllUnpaid,
+    formatDateRange,
+    formatProductSearch,
+    formatTopCustomers,
+    formatInactiveCustomers,
+    formatOverdueInvoices
+} = require('./advancedFormatters');
 require('dotenv').config();
 
 // Admin Configuration
@@ -863,7 +881,22 @@ async function handleMessage(message) {
             getInvoiceDetails,
             formatInvoiceDetails,
             getCustomerInvoices,
-            formatCustomerInvoices
+            formatCustomerInvoices,
+            // Phase 2 functions
+            getAllUnpaidInvoices,
+            formatAllUnpaid,
+            getInvoicesByDateRange,
+            getRecentInvoices,
+            getCurrentMonthInvoices,
+            formatDateRange,
+            searchInvoicesByProduct,
+            formatProductSearch,
+            getTopCustomers,
+            formatTopCustomers,
+            getInactiveCustomers,
+            formatInactiveCustomers,
+            getOverdueInvoices,
+            formatOverdueInvoices
         });
 
         if (routeResult.handled) {
