@@ -31,21 +31,12 @@ function formatAllUnpaid(result, language = 'en') {
         ? `总欠款: ${formatCurrency(result.totalAmount)}\n\n`
         : `Total Outstanding: ${formatCurrency(result.totalAmount)}\n\n`;
 
-    // Show top 10 customers with unpaid invoices
-    const topCustomers = result.customers.slice(0, 10);
-
+    // Show all customers with unpaid invoices
     response += language === 'zh' ? `📋 客户明细:\n\n` : `📋 Customer Breakdown:\n\n`;
 
-    for (const customer of topCustomers) {
+    for (const customer of result.customers) {
         response += `👤 ${customer.name}\n`;
         response += `   ${formatCurrency(customer.total)} (${customer.count} ${language === 'zh' ? '张发票' : 'invoices'})\n\n`;
-    }
-
-    if (result.customers.length > 10) {
-        const remaining = result.customers.length - 10;
-        response += language === 'zh'
-            ? `...还有 ${remaining} 个客户\n\n`
-            : `...and ${remaining} more customers\n\n`;
     }
 
     response += language === 'zh'
@@ -152,13 +143,11 @@ function formatProductSearch(result, language = 'en') {
             : `  Qty: ${stats.qty} | Amount: ${formatCurrency(stats.amount)}\n\n`;
     }
 
-    // Recent invoices (limit to 5)
-    const recentInvoices = result.invoices.slice(0, 5);
+    // Show all matching invoices
+    if (result.invoices.length > 0) {
+        response += language === 'zh' ? `📋 发票列表:\n\n` : `📋 Invoice List:\n\n`;
 
-    if (recentInvoices.length > 0) {
-        response += language === 'zh' ? `📋 最近发票:\n\n` : `📋 Recent Invoices:\n\n`;
-
-        for (const invoice of recentInvoices) {
+        for (const invoice of result.invoices) {
             response += `${invoice.invoiceNo} (${invoice.date})\n`;
             response += `${invoice.customer} | ${invoice.quantity} × ${formatCurrency(invoice.amount)}\n\n`;
         }
@@ -234,9 +223,7 @@ function formatInactiveCustomers(result, language = 'en') {
         ? `😴 ${result.cutoffDays} 天内未下单客户 (${result.inactiveCount})\n\n`
         : `😴 Inactive Customers (${result.cutoffDays}+ days) - ${result.inactiveCount} total\n\n`;
 
-    const customersToShow = result.customers.slice(0, 15);
-
-    for (const customer of customersToShow) {
+    for (const customer of result.customers) {
         response += `👤 ${customer.name}\n`;
 
         response += language === 'zh'
@@ -246,13 +233,6 @@ function formatInactiveCustomers(result, language = 'en') {
         response += language === 'zh'
             ? `   最后金额: ${formatCurrency(customer.lastAmount)}\n\n`
             : `   Last Amount: ${formatCurrency(customer.lastAmount)}\n\n`;
-    }
-
-    if (result.customers.length > 15) {
-        const remaining = result.customers.length - 15;
-        response += language === 'zh'
-            ? `...还有 ${remaining} 个客户\n\n`
-            : `...and ${remaining} more customers\n\n`;
     }
 
     response += language === 'zh'
@@ -294,9 +274,7 @@ function formatOverdueInvoices(result, language = 'en') {
 
     response += language === 'zh' ? `📋 逾期明细:\n\n` : `📋 Overdue Details:\n\n`;
 
-    const invoicesToShow = result.invoices.slice(0, 15);
-
-    for (const invoice of invoicesToShow) {
+    for (const invoice of result.invoices) {
         const urgency = invoice.daysOverdue > 60 ? '🔴' : invoice.daysOverdue > 30 ? '🟠' : '🟡';
 
         response += `${urgency} ${invoice.invoiceNo}\n`;
@@ -307,13 +285,6 @@ function formatOverdueInvoices(result, language = 'en') {
             : `   Overdue: ${invoice.daysOverdue} days | ${formatCurrency(invoice.amount)}\n`;
 
         response += `   ${language === 'zh' ? '开票日期' : 'Date'}: ${invoice.date}\n\n`;
-    }
-
-    if (result.invoices.length > 15) {
-        const remaining = result.invoices.length - 15;
-        response += language === 'zh'
-            ? `...还有 ${remaining} 张发票\n\n`
-            : `...and ${remaining} more invoices\n\n`;
     }
 
     response += language === 'zh'
