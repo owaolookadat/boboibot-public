@@ -30,7 +30,9 @@ function checkPaymentStatus(invoiceData, customerName) {
         const rowCustomer = (row[customerNameIndex] || '').toLowerCase();
         const docNo = row[docNoIndex] || '';
         const status = (row[statusIndex] || '').toLowerCase().trim();
-        const amount = parseFloat(row[amountIndex]) || 0;
+        // Remove commas from amount before parsing (e.g., "7,634.60" -> "7634.60")
+        const amountStr = (row[amountIndex] || '').toString().replace(/,/g, '');
+        const amount = parseFloat(amountStr) || 0;
         const date = row[dateIndex] || '';
 
         // Skip if not matching customer
