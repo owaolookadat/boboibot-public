@@ -3,9 +3,16 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 
-const anthropic = new Anthropic({
-    apiKey: process.env.CLAUDE_API_KEY
-});
+// Lazy-load anthropic client to ensure .env is loaded first
+let anthropic = null;
+function getAnthropicClient() {
+    if (!anthropic) {
+        anthropic = new Anthropic({
+            apiKey: process.env.CLAUDE_API_KEY
+        });
+    }
+    return anthropic;
+}
 
 /**
  * Classify user intent using AI (Claude Haiku - fast & cheap)
@@ -85,7 +92,7 @@ RULES:
 - Set confidence high (0.8+) only if very clear
 - For ambiguous queries, use "general_query" with lower confidence`;
 
-        const response = await anthropic.messages.create({
+        const response = await getAnthropicClient().messages.create({
             model: "claude-haiku-3-5-20241022", // Fast & cheap for classification
             max_tokens: 300,
             messages: [{
