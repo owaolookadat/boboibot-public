@@ -95,12 +95,17 @@ function parseReminder(input) {
 function extractTask(input) {
     // Remove common reminder prefixes
     let task = input
-        .replace(/^(remind me to|reminder to|remind me|reminder:?)/i, '')
+        .replace(/^(remind me to|reminder to|remind to|remind me|reminder:?)/i, '')
         .replace(/^(set (a )?reminder (to|for)?)/i, '')
         .trim();
 
-    // Remove time expressions from the end
-    task = task.replace(/(at |on |in |every |tomorrow|today|next|this|morning|afternoon|evening|night|\d+:\d+|am|pm).*$/i, '').trim();
+    // Remove time expressions from the end (more specific patterns)
+    // IMPORTANT: Match complete time phrases, not just keywords
+    task = task.replace(/\s+(in \d+\s+(second|minute|hour|day|week|month)s?)/i, '').trim();
+    task = task.replace(/\s+(at \d+([:.]\d+)?\s*(am|pm)?)/i, '').trim();
+    task = task.replace(/\s+(on |every )?(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i, '').trim();
+    task = task.replace(/\s+(next (week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday))/i, '').trim();
+    task = task.replace(/\s+\d+\/\d+\/\d+/i, '').trim(); // Remove dates like 8/2/26
 
     return task || null;
 }
