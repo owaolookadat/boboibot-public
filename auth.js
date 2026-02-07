@@ -4,12 +4,15 @@ const path = require('path');
 const http = require('http');
 const url = require('url');
 
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets']; // Read AND write access
+const SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/calendar'
+]; // Sheets + Calendar access
 const TOKEN_PATH = path.join(__dirname, 'token.json');
 const CREDENTIALS_PATH = path.join(__dirname, 'oauth_credentials.json');
 
 async function authenticate() {
-    console.log('🔐 Google Sheets Authentication\n');
+    console.log('🔐 Google Sheets + Calendar Authentication\n');
 
     // Check for credentials file
     if (!fs.existsSync(CREDENTIALS_PATH)) {
