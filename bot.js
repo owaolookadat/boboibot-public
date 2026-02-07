@@ -790,11 +790,12 @@ async function handleMessage(message) {
             return;
         }
 
-        // DM from admin - personal mode
+        // DM from admin - personal mode (uses same AI pipeline as groups for consistency)
         if (!chat.isGroup && isAdmin) {
             console.log('📱 Private DM from admin');
             const businessData = await getAllBusinessData();
-            const answer = await askClaudePersonalWithData(message.body, businessData);
+            const chatId = chat.id._serialized;
+            const answer = await askClaude(message.body, businessData, chatId, null);
             await message.reply(answer);
             console.log(`✅ Private response sent`);
             return;
