@@ -13,17 +13,10 @@ const financialAdvisor = require('./financialAdvisor');
 function detectPersonalIntent(message, context = {}) {
     const lower = message.toLowerCase();
 
-    // Group reminder patterns (e.g., "remind me to message this group...")
-    const isGroupReminder = /remind\s+me\s+to\s+(message|post|send|tell|text|notify)\s+(this\s+)?(group|chat|here)/i.test(message) ||
-                           /remind\s+(this\s+)?(group|chat)/i.test(message);
-
-    // Reminder patterns (flexible to catch variations like "remind me", "remind to", "reminder", etc.)
-    if (/remind(\s+me|\s+to)?|reminder|set\s+reminder|alert\s+me|notify\s+me/i.test(message)) {
-        return {
-            isPersonal: true,
-            type: 'reminder',
-            isGroupReminder: isGroupReminder && context.isGroup
-        };
+    // IMPORTANT: Check delete/cancel/remove FIRST before general reminder pattern
+    // This prevents "delete reminder" from matching "reminder" pattern
+    if (/delete\s+(last\s+)?reminder|cancel\s+(last\s+)?reminder|remove\s+(last\s+)?reminder/i.test(message)) {
+        return { isPersonal: true, type: 'delete_reminder' };
     }
 
     // Calendar/Schedule patterns
@@ -31,9 +24,18 @@ function detectPersonalIntent(message, context = {}) {
         return { isPersonal: true, type: 'calendar_query' };
     }
 
-    // Delete reminder (check before confirm/cancel to avoid conflicts)
-    if (/delete\s+(last\s+)?reminder|cancel\s+(last\s+)?reminder|remove\s+(last\s+)?reminder/i.test(message)) {
-        return { isPersonal: true, type: 'delete_reminder' };
+    // Group reminder patterns (e.g., "remind me to message this group...")
+    const isGroupReminder = /remind\s+me\s+to\s+(message|post|send|tell|text|notify)\s+(this\s+)?(group|chat|here)/i.test(message) ||
+                           /remind\s+(this\s+)?(group|chat)/i.test(message);
+
+    // Reminder patterns (flexible to catch variations like "remind me", "remind to", "reminder", etc.)
+    // NOTE: This pattern matches "reminder" keyword, so specific commands like "delete reminder" must be checked FIRST
+    if (/remind(\s+me|\s+to)?|reminder|set\s+reminder|alert\s+me|notify\s+me/i.test(message)) {
+        return {
+            isPersonal: true,
+            type: 'reminder',
+            isGroupReminder: isGroupReminder && context.isGroup
+        };
     }
 
     // Confirmation responses (yes/no) - check if there's a pending confirmation
