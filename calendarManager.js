@@ -77,7 +77,7 @@ class CalendarManager {
             throw new Error('Calendar not initialized');
         }
 
-        const { task, datetime, repeat, alertMinutes = [15, 5] } = reminder;
+        const { task, datetime, repeat, alertMinutes = [0, 5, 15] } = reminder;
 
         // Create event object
         const event = {
