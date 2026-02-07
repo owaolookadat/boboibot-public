@@ -17,8 +17,8 @@ function detectPersonalIntent(message, context = {}) {
     const isGroupReminder = /remind\s+me\s+to\s+(message|post|send|tell|text|notify)\s+(this\s+)?(group|chat|here)/i.test(message) ||
                            /remind\s+(this\s+)?(group|chat)/i.test(message);
 
-    // Reminder patterns
-    if (/remind\s+me|reminder|set\s+reminder|alert\s+me|notify\s+me/i.test(message)) {
+    // Reminder patterns (flexible to catch variations like "remind me", "remind to", "reminder", etc.)
+    if (/remind(\s+me|\s+to)?|reminder|set\s+reminder|alert\s+me|notify\s+me/i.test(message)) {
         return {
             isPersonal: true,
             type: 'reminder',
