@@ -34,27 +34,33 @@ function parseReminder(input) {
     const result = parsedDate[0];
     let datetime = result.start.date();
 
-    // Chrono parses in local machine time, but we need to ensure it's interpreted as Malaysia time
-    // Since the server is running in UTC, we need to adjust
-    // Get the parsed components
-    const hour = result.start.get('hour');
-    const minute = result.start.get('minute') || 0;
-    const day = result.start.get('day');
-    const month = result.start.get('month');
-    const year = result.start.get('year');
+    // Check if this is a relative time (like "in 1 minute")
+    // Relative times are already calculated from current time, so no adjustment needed
+    const isRelativeTime = /\b(in|after)\s+\d+\s+(second|minute|hour|day|week|month)s?\b/i.test(input);
 
-    // If we have time components, reconstruct the date in Malaysia timezone
-    if (hour !== null) {
-        // Create date with Malaysia timezone offset
-        datetime = new Date(Date.UTC(
-            year,
-            month - 1,
-            day,
-            hour - 8, // Subtract 8 hours to convert from Malaysia to UTC
-            minute,
-            0
-        ));
+    if (!isRelativeTime) {
+        // For absolute times (like "3pm tomorrow"), we need to adjust for timezone
+        // Server is in UTC, user input is Malaysia time (UTC+8)
+        const hour = result.start.get('hour');
+        const minute = result.start.get('minute') || 0;
+        const day = result.start.get('day');
+        const month = result.start.get('month');
+        const year = result.start.get('year');
+
+        // If we have time components, reconstruct the date in Malaysia timezone
+        if (hour !== null) {
+            // Create date with Malaysia timezone offset
+            datetime = new Date(Date.UTC(
+                year,
+                month - 1,
+                day,
+                hour - 8, // Subtract 8 hours to convert from Malaysia to UTC
+                minute,
+                0
+            ));
+        }
     }
+    // For relative times, datetime is already correct from chrono.parse()
 
     // Detect recurring patterns
     const repeat = detectRecurring(input);
